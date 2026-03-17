@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ShineUP Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2128;
+    --border: #2a2d35;
+    --accent: #00e5a0;
+    --accent-dim: rgba(0,229,160,0.12);
+    --accent-dim2: rgba(0,229,160,0.06);
+    --warn: #ffb547;
+    --warn-dim: rgba(255,181,71,0.12);
+    --danger: #ff5c5c;
+    --text: #eef0f4;
+    --text-2: #8b909e;
+    --text-3: #555a66;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── VIEWS ─── */
+  .view { display: none; min-height: 100vh; flex-direction: column; }
+  .view.active { display: flex; }
+
+  /* ─── TOP BAR ─── */
+  .topbar {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .topbar-logo span { color: var(--accent); }
+  .topbar-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid rgba(0,229,160,0.25);
+    border-radius: 20px; padding: 3px 10px;
+  }
+  .back-btn {
+    background: none; border: none; color: var(--text-2);
+    font-size: 22px; cursor: pointer; padding: 4px 8px 4px 0;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+  }
+  .back-btn:active { color: var(--accent); }
+
+  /* ─── SCROLL CONTENT ─── */
+  .scroll-content {
+    flex: 1; overflow-y: auto; padding: 16px 20px 100px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ─── HOME VIEW ─── */
+  .date-header {
+    margin-bottom: 20px;
+  }
+  .date-header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px; font-weight: 800; letter-spacing: -0.8px;
+    line-height: 1.1;
+  }
+  .date-header p {
+    font-size: 13px; color: var(--text-2); margin-top: 4px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .stats-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-card .val {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px; font-weight: 800; line-height: 1;
+  }
+  .stat-card .lbl {
+    font-size: 11px; color: var(--text-2); text-transform: uppercase;
+    letter-spacing: 0.5px; font-family: 'DM Mono', monospace;
+  }
+  .stat-card.green .val { color: var(--accent); }
+  .stat-card.warn .val { color: var(--warn); }
+  .stat-card.neutral .val { color: var(--text); }
+
+  .section-title {
+    font-size: 11px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 1px;
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  /* ─── JOB CARD ─── */
+  .job-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+    position: relative; overflow: hidden;
+  }
+  .job-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    border-radius: 3px 0 0 3px;
+  }
+  .job-card.status-pending::before { background: var(--warn); }
+  .job-card.status-inprogress::before { background: var(--accent); }
+  .job-card.status-done::before { background: var(--text-3); }
+  .job-card:active { transform: scale(0.985); border-color: var(--accent); }
+
+  .job-card-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .job-name {
+    font-size: 15px; font-weight: 600; line-height: 1.2;
+    max-width: 200px;
+  }
+  .job-status {
+    font-size: 10px; font-family: 'DM Mono', monospace;
+    padding: 3px 9px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;
+  }
+  .status-pending .job-status { background: var(--warn-dim); color: var(--warn); }
+  .status-inprogress .job-status { background: var(--accent-dim); color: var(--accent); }
+  .status-done .job-status { background: var(--surface2); color: var(--text-3); }
+
+  .job-meta {
+    display: flex; gap: 14px; align-items: center;
+  }
+  .job-meta-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--text-2);
+  }
+  .job-meta-item .icon { font-size: 13px; }
+
+  .job-progress-bar {
+    margin-top: 12px;
+    height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden;
+  }
+  .job-progress-fill {
+    height: 100%; border-radius: 4px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+  .status-done .job-progress-fill { background: var(--text-3); }
+
+  /* ─── CHECKLIST VIEW ─── */
+  .checklist-header {
+    margin-bottom: 20px;
+  }
+  .checklist-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
+    line-height: 1.2; margin-bottom: 6px;
+  }
+  .checklist-meta-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .checklist-meta-pill {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--text-2);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .progress-ring-wrap {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .progress-ring-wrap svg { flex-shrink: 0; }
+  .progress-info h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px; font-weight: 800;
+  }
+  .progress-info h3 span { color: var(--accent); }
+  .progress-info p { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+
+  /* ─── SECTION GROUP ─── */
+  .task-section { margin-bottom: 20px; }
+  .task-section-title {
+    font-size: 11px; color: var(--text-3); letter-spacing: 1px;
+    text-transform: uppercase; font-family: 'DM Mono', monospace;
+    margin-bottom: 8px; padding-left: 2px;
+  }
+
+  /* ─── TASK ITEM ─── */
+  .task-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 13px 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .task-item.checked {
+    background: var(--accent-dim2);
+    border-color: rgba(0,229,160,0.2);
+  }
+  .task-item:active { transform: scale(0.98); }
+
+  .task-checkbox {
+    width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s;
+    font-size: 13px;
+  }
+  .task-item.checked .task-checkbox {
+    background: var(--accent); border-color: var(--accent);
+    color: #000;
+  }
+
+  .task-text { flex: 1; }
+  .task-text .task-name {
+    font-size: 14px; font-weight: 500;
+    transition: color 0.15s;
+  }
+  .task-item.checked .task-name {
+    color: var(--text-2); text-decoration: line-through;
+  }
+  .task-text .task-detail {
+    font-size: 11px; color: var(--text-3); margin-top: 2px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .task-eqp {
+    font-size: 10px; font-family: 'DM Mono', monospace;
+    color: var(--accent); background: var(--accent-dim);
+    border-radius: 4px; padding: 2px 7px;
+    flex-shrink: 0;
+  }
+
+  /* ─── COMPLETE BTN ─── */
+  .bottom-action {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 16px 20px 28px;
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    z-index: 10;
+  }
+  .complete-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px; font-weight: 800;
+    letter-spacing: -0.3px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .complete-btn:disabled {
+    opacity: 0.3; cursor: not-allowed;
+  }
+  .complete-btn:not(:disabled):active { transform: scale(0.97); }
+
+  /* ─── DONE OVERLAY ─── */
+  .done-overlay {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 40px;
+    animation: fadeIn 0.3s ease;
+  }
+  .done-overlay.show { display: flex; }
+  .done-icon { font-size: 64px; margin-bottom: 20px; animation: pop 0.4s ease; }
+  .done-overlay h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px; font-weight: 800; letter-spacing: -0.8px;
+    margin-bottom: 8px;
+  }
+  .done-overlay h2 span { color: var(--accent); }
+  .done-overlay p { color: var(--text-2); font-size: 14px; margin-bottom: 32px; }
+  .done-back-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 14px 32px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 80% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+
+  /* ─── RIPPLE ─── */
+  .task-item { position: relative; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<!-- ════ HOME VIEW ════ -->
+<div class="view active" id="view-home">
+  <div class="topbar">
+    <div class="topbar-logo">Shine<span>UP</span> Ops</div>
+    <div class="topbar-badge">HOY · LUNES</div>
+  </div>
+  <div class="scroll-content">
+    <div class="date-header">
+      <h1>Buenos días,<br>Juan 👋</h1>
+      <p>16 MAR 2026 · 4 trabajos asignados</p>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card green">
+        <div class="val">1</div>
+        <div class="lbl">Listos</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="val">2</div>
+        <div class="lbl">Pendiente</div>
+      </div>
+      <div class="stat-card neutral">
+        <div class="val">1</div>
+        <div class="lbl">En curso</div>
+      </div>
+    </div>
+
+    <div class="section-title">Trabajos de hoy</div>
+
+    <div class="job-card status-inprogress" onclick="openJob(0)">
+      <div class="job-card-top">
+        <div class="job-name">Apt 4B — Riverside Tower</div>
+        <div class="job-status">En curso</div>
+      </div>
+      <div class="job-meta">
+        <div class="job-meta-item"><span class="icon">🕐</span> 09:00 AM</div>
+        <div class="job-meta-item"><span class="icon">🛏</span> 2BR / 1BA</div>
+        <div class="job-meta-item"><span class="icon">👤</span> Ana</div>
+      </div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill" id="progress-bar-0" style="width:40%"></div>
+      </div>
+    </div>
+
+    <div class="job-card status-pending" onclick="openJob(1)">
+      <div class="job-card-top">
+        <div class="job-name">Suite 12 — Central Hotel</div>
+        <div class="job-status">Pendiente</div>
+      </div>
+      <div class="job-meta">
+        <div class="job-meta-item"><span class="icon">🕐</span> 11:30 AM</div>
+        <div class="job-meta-item"><span class="icon">🏨</span> Suite / 2BA</div>
+        <div class="job-meta-item"><span class="icon">👤</span> Carlos</div>
+      </div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="job-card status-pending" onclick="openJob(2)">
+      <div class="job-card-top">
+        <div class="job-name">Casa Miller — Oak St 210</div>
+        <div class="job-status">Pendiente</div>
+      </div>
+      <div class="job-meta">
+        <div class="job-meta-item"><span class="icon">🕐</span> 02:00 PM</div>
+        <div class="job-meta-item"><span class="icon">🏠</span> 3BR / 2BA</div>
+        <div class="job-meta-item"><span class="icon">👤</span> Ana</div>
+      </div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="job-card status-done" onclick="openJob(3)">
+      <div class="job-card-top">
+        <div class="job-name">Oficina 3F — Pine Building</div>
+        <div class="job-status">Listo</div>
+      </div>
+      <div class="job-meta">
+        <div class="job-meta-item"><span class="icon">🕐</span> 07:00 AM</div>
+        <div class="job-meta-item"><span class="icon">🏢</span> Oficina</div>
+        <div class="job-meta-item"><span class="icon">👤</span> Marta</div>
+      </div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill" style="width:100%"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ CHECKLIST VIEW ════ -->
+<div class="view" id="view-checklist">
+  <div class="topbar">
+    <button class="back-btn" onclick="goBack()">← Volver</button>
+    <div class="topbar-badge" id="checklist-status-badge">EN CURSO</div>
+  </div>
+  <div class="scroll-content">
+    <div class="checklist-header">
+      <h2 id="checklist-title">Apt 4B — Riverside Tower</h2>
+      <div class="checklist-meta-row">
+        <div class="checklist-meta-pill">🕐 <span id="checklist-time">09:00 AM</span></div>
+        <div class="checklist-meta-pill">🛏 <span id="checklist-type">2BR / 1BA</span></div>
+        <div class="checklist-meta-pill">👤 <span id="checklist-staff">Ana</span></div>
+      </div>
+    </div>
+
+    <div class="progress-ring-wrap">
+      <svg width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="21" fill="none" stroke="#2a2d35" stroke-width="4"/>
+        <circle id="ring-circle" cx="26" cy="26" r="21" fill="none"
+          stroke="#00e5a0" stroke-width="4"
+          stroke-dasharray="132" stroke-dashoffset="132"
+          stroke-linecap="round"
+          transform="rotate(-90 26 26)"
+          style="transition: stroke-dashoffset 0.4s ease"/>
+      </svg>
+      <div class="progress-info">
+        <h3><span id="progress-done">0</span> / <span id="progress-total">0</span></h3>
+        <p id="progress-label">tareas completadas</p>
+      </div>
+    </div>
+
+    <div id="checklist-body"></div>
+  </div>
+
+  <div class="bottom-action">
+    <button class="complete-btn" id="complete-btn" disabled onclick="completeJob()">
+      ✓ Marcar trabajo como listo
+    </button>
+  </div>
+</div>
+
+<!-- ════ DONE OVERLAY ════ -->
+<div class="done-overlay" id="done-overlay">
+  <div class="done-icon">✅</div>
+  <h2>¡Trabajo <span>completado!</span></h2>
+  <p id="done-label">Apt 4B — Riverside Tower<br>registrado a las 10:42 AM</p>
+  <button class="done-back-btn" onclick="finishJob()">← Volver al inicio</button>
+</div>
+
+<script>
+const JOBS = [
+  {
+    id: 0, name: 'Apt 4B — Riverside Tower', time: '09:00 AM',
+    type: '2BR / 1BA', staff: 'Ana', status: 'inprogress',
+    sections: [
+      {
+        title: 'ENTRADA / SALA',
+        tasks: [
+          { name: 'Aspirar sala y entrada', detail: 'Incluye debajo del sofá', eqp: 'EQP-VAC-01' },
+          { name: 'Limpiar polvo en superficies', detail: 'Mesas, estantes, TV', eqp: 'EQP-MOP-tiKup' },
+          { name: 'Limpiar vidrios y espejos', detail: '', eqp: 'EQP-SPRAY-02' },
+        ]
+      },
+      {
+        title: 'COCINA',
+        tasks: [
+          { name: 'Limpiar estufa y horno', detail: 'Usar desengrasante', eqp: 'EQP-SCRU-03' },
+          { name: 'Desinfectar mesón y fregadero', detail: '', eqp: 'EQP-SPRAY-02' },
+          { name: 'Limpiar microondas por dentro', detail: '', eqp: 'EQP-SPRAY-02' },
+          { name: 'Barrer y fregar piso', detail: '', eqp: 'EQP-MOP-tiKup' },
+        ]
+      },
+      {
+        title: 'BAÑO',
+        tasks: [
+          { name: 'Limpiar inodoro completo', detail: 'Desinfectante + cepillo', eqp: 'EQP-SCRU-03' },
+          { name: 'Limpiar ducha y tina', detail: 'Eliminar sarro', eqp: 'EQP-SCRU-03' },
+          { name: 'Limpiar lavamanos y espejo', detail: '', eqp: 'EQP-SPRAY-02' },
+          { name: 'Fregar piso del baño', detail: '', eqp: 'EQP-MOP-tiKup' },
+        ]
+      },
+      {
+        title: 'HABITACIONES',
+        tasks: [
+          { name: 'Cambiar ropa de cama', detail: '2 habitaciones', eqp: '' },
+          { name: 'Aspirar cuartos', detail: '', eqp: 'EQP-VAC-01' },
+          { name: 'Limpiar polvo muebles', detail: 'Mesitas, cómodas', eqp: 'EQP-MOP-tiKup' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 1, name: 'Suite 12 — Central Hotel', time: '11:30 AM',
+    type: 'Suite / 2BA', staff: 'Carlos', status: 'pending',
+    sections: [
+      {
+        title: 'SUITE PRINCIPAL',
+        tasks: [
+          { name: 'Cambiar ropa de cama king', detail: '', eqp: '' },
+          { name: 'Aspirar alfombra', detail: '', eqp: 'EQP-VAC-01' },
+          { name: 'Limpiar superficies', detail: 'Mesa, escritorio, TV', eqp: 'EQP-MOP-tiKup' },
+        ]
+      },
+      {
+        title: 'BAÑOS (x2)',
+        tasks: [
+          { name: 'Limpiar baño principal', detail: 'Sanitarios + ducha + piso', eqp: 'EQP-SCRU-03' },
+          { name: 'Limpiar baño secundario', detail: '', eqp: 'EQP-SCRU-03' },
+          { name: 'Reemplazar amenities', detail: 'Jabón, shampoo, toallas', eqp: '' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 2, name: 'Casa Miller — Oak St 210', time: '02:00 PM',
+    type: '3BR / 2BA', staff: 'Ana', status: 'pending',
+    sections: [
+      {
+        title: 'ÁREAS COMUNES',
+        tasks: [
+          { name: 'Aspirar sala y comedor', detail: '', eqp: 'EQP-VAC-01' },
+          { name: 'Fregar pisos', detail: 'Cocina, comedor, entrada', eqp: 'EQP-MOP-tiKup' },
+          { name: 'Limpiar cocina completa', detail: '', eqp: 'EQP-SPRAY-02' },
+        ]
+      },
+      {
+        title: 'HABITACIONES (x3)',
+        tasks: [
+          { name: 'Tender camas', detail: '3 habitaciones', eqp: '' },
+          { name: 'Aspirar cuartos', detail: '', eqp: 'EQP-VAC-01' },
+        ]
+      },
+      {
+        title: 'BAÑOS (x2)',
+        tasks: [
+          { name: 'Limpiar baño master', detail: '', eqp: 'EQP-SCRU-03' },
+          { name: 'Limpiar baño secundario', detail: '', eqp: 'EQP-SCRU-03' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 3, name: 'Oficina 3F — Pine Building', time: '07:00 AM',
+    type: 'Oficina', staff: 'Marta', status: 'done',
+    sections: [
+      {
+        title: 'ÁREA DE TRABAJO',
+        tasks: [
+          { name: 'Aspirar área de trabajo', detail: '', eqp: 'EQP-VAC-01', done: true },
+          { name: 'Limpiar escritorios', detail: '', eqp: 'EQP-MOP-tiKup', done: true },
+          { name: 'Vaciar papeleras', detail: '', eqp: '', done: true },
+          { name: 'Limpiar cocina/kitchenette', detail: '', eqp: 'EQP-SPRAY-02', done: true },
+          { name: 'Limpiar baño de oficina', detail: '', eqp: 'EQP-SCRU-03', done: true },
+        ]
+      }
+    ]
+  }
+];
+
+// Track check state per job
+const checkState = {};
+JOBS.forEach(job => {
+  checkState[job.id] = {};
+  job.sections.forEach((sec, si) => {
+    sec.tasks.forEach((t, ti) => {
+      checkState[job.id][`${si}-${ti}`] = t.done || false;
+    });
+  });
+});
+
+let currentJobId = null;
+
+function openJob(id) {
+  currentJobId = id;
+  const job = JOBS[id];
+
+  document.getElementById('checklist-title').textContent = job.name;
+  document.getElementById('checklist-time').textContent = job.time;
+  document.getElementById('checklist-type').textContent = job.type;
+  document.getElementById('checklist-staff').textContent = job.staff;
+
+  const badge = document.getElementById('checklist-status-badge');
+  const statusMap = { inprogress: 'EN CURSO', pending: 'PENDIENTE', done: 'LISTO ✓' };
+  badge.textContent = statusMap[job.status] || job.status.toUpperCase();
+
+  renderChecklist(job);
+  updateProgress(job);
+
+  document.getElementById('view-home').classList.remove('active');
+  document.getElementById('view-checklist').classList.add('active');
+  document.getElementById('view-checklist').querySelector('.scroll-content').scrollTop = 0;
+}
+
+function renderChecklist(job) {
+  const body = document.getElementById('checklist-body');
+  body.innerHTML = '';
+
+  job.sections.forEach((sec, si) => {
+    const secDiv = document.createElement('div');
+    secDiv.className = 'task-section';
+
+    const title = document.createElement('div');
+    title.className = 'task-section-title';
+    title.textContent = sec.title;
+    secDiv.appendChild(title);
+
+    sec.tasks.forEach((task, ti) => {
+      const key = `${si}-${ti}`;
+      const checked = checkState[job.id][key];
+
+      const item = document.createElement('div');
+      item.className = `task-item${checked ? ' checked' : ''}`;
+      item.dataset.key = key;
+      item.onclick = () => toggleTask(job.id, key, item);
+
+      item.innerHTML = `
+        <div class="task-checkbox">${checked ? '✓' : ''}</div>
+        <div class="task-text">
+          <div class="task-name">${task.name}</div>
+          ${task.detail ? `<div class="task-detail">${task.detail}</div>` : ''}
+        </div>
+        ${task.eqp ? `<div class="task-eqp">${task.eqp}</div>` : ''}
+      `;
+      secDiv.appendChild(item);
+    });
+
+    body.appendChild(secDiv);
+  });
+}
+
+function toggleTask(jobId, key, el) {
+  checkState[jobId][key] = !checkState[jobId][key];
+  const checked = checkState[jobId][key];
+  el.classList.toggle('checked', checked);
+  el.querySelector('.task-checkbox').textContent = checked ? '✓' : '';
+  updateProgress(JOBS[jobId]);
+}
+
+function updateProgress(job) {
+  const keys = Object.keys(checkState[job.id]);
+  const done = keys.filter(k => checkState[job.id][k]).length;
+  const total = keys.length;
+
+  document.getElementById('progress-done').textContent = done;
+  document.getElementById('progress-total').textContent = total;
+
+  const pct = total > 0 ? done / total : 0;
+  const circle = document.getElementById('ring-circle');
+  const circumference = 132;
+  circle.style.strokeDashoffset = circumference * (1 - pct);
+
+  const allDone = done === total;
+  const btn = document.getElementById('complete-btn');
+  btn.disabled = !allDone || job.status === 'done';
+
+  document.getElementById('progress-label').textContent =
+    allDone ? '¡Todo listo! 🎉' : `de ${total} tareas completadas`;
+
+  // Update home progress bar
+  const bar = document.getElementById(`progress-bar-${job.id}`);
+  if (bar) bar.style.width = `${Math.round(pct * 100)}%`;
+}
+
+function goBack() {
+  document.getElementById('view-checklist').classList.remove('active');
+  document.getElementById('view-home').classList.add('active');
+}
+
+function completeJob() {
+  const job = JOBS[currentJobId];
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('done-label').innerHTML = `${job.name}<br>registrado a las ${timeStr}`;
+
+  job.status = 'done';
+  // Update home card
+  const cards = document.querySelectorAll('.job-card');
+  cards[currentJobId].className = `job-card status-done`;
+
+  document.getElementById('done-overlay').classList.add('show');
+}
+
+function finishJob() {
+  document.getElementById('done-overlay').classList.remove('show');
+  document.getElementById('view-checklist').classList.remove('active');
+  document.getElementById('view-home').classList.add('active');
+}
+</script>
+</body>
+</html>
