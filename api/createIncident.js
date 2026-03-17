@@ -7,16 +7,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { status, comment, propertyId, cleaningId } = req.body;
+    const { name, comment, propertyId, cleaningId } = req.body;
+    if (!name) return res.status(400).json({ error: 'name requerido' });
 
     const fields = {
-      'Status': status || 'Low',
+      'Name': name,
       'Comment': comment || '',
+      'Status': 'Reported',
     };
     if (propertyId) fields['Property'] = [propertyId];
     if (cleaningId) fields['Cleaning'] = [cleaningId];
 
-    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblClientInventory`, {
+    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tbli8QbMBjUuzsCPw`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
@@ -31,7 +33,13 @@ export default async function handler(req, res) {
     }
 
     const data = await airtableRes.json();
-    return res.status(200).json({ success: true, id: data.id });
+    return res.status(200).json({
+      id: data.id,
+      name: data.fields?.Name || name,
+      status: 'Reported',
+      comment: comment || '',
+      photoUrls: [],
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

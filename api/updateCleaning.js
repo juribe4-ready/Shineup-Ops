@@ -7,17 +7,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { status, comment, propertyId, cleaningId } = req.body;
+    const { cleaningId, status, startTime, endTime, rating, openComments } = req.body;
+    if (!cleaningId) return res.status(400).json({ error: 'cleaningId requerido' });
 
-    const fields = {
-      'Status': status || 'Low',
-      'Comment': comment || '',
-    };
-    if (propertyId) fields['Property'] = [propertyId];
-    if (cleaningId) fields['Cleaning'] = [cleaningId];
+    const fields = {};
+    if (status) fields['Status'] = status;
+    if (startTime) fields['Start Time'] = startTime;
+    if (endTime) fields['End Time'] = endTime;
+    if (rating !== undefined) {
+      const ratingMap = { 1: '⭐ Malo', 2: '⭐⭐ Normal', 3: '⭐⭐⭐ Bueno' };
+      fields['Rating'] = ratingMap[rating] || rating;
+    }
+    if (openComments !== undefined) fields['OpenComments'] = openComments;
 
-    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblClientInventory`, {
-      method: 'POST',
+    console.log(`[updateCleaning] ${cleaningId}`, fields);
+
+    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1/${cleaningId}`, {
+      method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
         'Content-Type': 'application/json',
@@ -33,6 +39,7 @@ export default async function handler(req, res) {
     const data = await airtableRes.json();
     return res.status(200).json({ success: true, id: data.id });
   } catch (err) {
+    console.error('[updateCleaning] Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
