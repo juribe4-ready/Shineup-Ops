@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     const { propertyId } = req.query;
     if (!propertyId) return res.status(200).json([]);
 
-    const formula = encodeURIComponent(`AND(FIND("${propertyId}", ARRAYJOIN({Property}, ",")), {Status} != "Optimal")`);
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblClientInventory?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`;
+    // Traer todos y filtrar en JS
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory?sort[0][field]=Date&sort[0][direction]=desc`;
 
     const airtableRes = await fetch(url, {
       headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
@@ -19,21 +19,37 @@ export default async function handler(req, res) {
     if (!airtableRes.ok) return res.status(500).json({ error: 'Error Airtable' });
 
     const data = await airtableRes.json();
-    const records = (data.records || []).map(r => {
+    const allRecords = data.records || [];
+
+    console.log(`[getInventory] Total: ${allRecords.length} | propertyId: ${propertyId}`);
+
+    const filtered = allRecords.filter(r => {
       const f = r.fields;
-      const photos = f['Photos'] || [];
+      const prop = f['Property'];
+      const status = f['Status'] || '';
+      const propMatch = Array.isArray(prop)
+        ? prop.includes(propertyId)
+        : prop === propertyId;
+      return propMatch && status !== 'Optimal';
+    });
+
+    console.log(`[getInventory] Filtrados: ${filtered.length}`);
+
+    const records = filtered.map(r => {
+      const f = r.fields;
+      const photos = f['Attachments'] || f['Photos'] || [];
       return {
         id: r.id,
         status: f['Status'] || 'Low',
         comment: f['Comment'] || f['Item'] || '',
         date: f['Date'] || null,
-        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
+        photoUrls: Array.isArray(photos) ? photos.map((p: any) => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
 
     return res.status(200).json(records);
-  } catch (err) {
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 }

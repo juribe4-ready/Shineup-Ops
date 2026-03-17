@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     const { propertyId } = req.query;
     if (!propertyId) return res.status(200).json([]);
 
-    const formula = encodeURIComponent(`AND(FIND("${propertyId}", ARRAYJOIN({Property}, ",")), {Status} != "Closed")`);
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tbli8QbMBjUuzsCPw?filterByFormula=${formula}&sort[0][field]=Creation Date&sort[0][direction]=desc`;
+    // Traer todos y filtrar en JS - mas confiable que formulas con linked records
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/Incidents?sort[0][field]=Creation Date&sort[0][direction]=desc`;
 
     const airtableRes = await fetch(url, {
       headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
@@ -19,22 +19,39 @@ export default async function handler(req, res) {
     if (!airtableRes.ok) return res.status(500).json({ error: 'Error Airtable' });
 
     const data = await airtableRes.json();
-    const incidents = (data.records || []).map(r => {
+    const allRecords = data.records || [];
+
+    console.log(`[getIncidents] Total: ${allRecords.length} | propertyId: ${propertyId}`);
+
+    const filtered = allRecords.filter(r => {
+      const f = r.fields;
+      const prop = f['Property'];
+      const status = f['Status'] || '';
+      // Property puede ser string o array
+      const propMatch = Array.isArray(prop)
+        ? prop.includes(propertyId)
+        : prop === propertyId;
+      return propMatch && status !== 'Closed';
+    });
+
+    console.log(`[getIncidents] Filtrados: ${filtered.length}`);
+
+    const incidents = filtered.map(r => {
       const f = r.fields;
       const photos = f['Photos'] || [];
       return {
         id: r.id,
-        name: f['Name'] || f['Incident Name'] || 'Sin nombre',
+        name: f['Name'] || 'Sin nombre',
         status: f['Status'] || 'Reported',
-        creationDate: f['Creation Date'] || f['Created'] || null,
-        comment: f['Comment'] || f['Description'] || '',
-        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
+        creationDate: f['Creation Date'] || null,
+        comment: f['Comment'] || '',
+        photoUrls: Array.isArray(photos) ? photos.map((p: any) => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
 
     return res.status(200).json(incidents);
-  } catch (err) {
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 }
