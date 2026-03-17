@@ -12,7 +12,7 @@ const TEAL_DARK = '#0097A7'
 const TEMP_USER = {
   // PON AQUI el Staff record ID de tu usuario de prueba en Airtable
   // Lo encuentras en la tabla Staff de tu base appBwnoxgyIXILe6M
-  staffId: 'REEMPLAZA_CON_TU_STAFF_RECORD_ID',
+  staffId: 'rec6CVsLgwP3bZuih',
   firstName: 'Juan',
   initials: 'JR',
   email: 'juan@shineup.com',
@@ -60,7 +60,7 @@ export default function App() {
     try {
       // Fecha de hoy en Columbus OH
       const now = new Date()
-      const columbusDate = new Date(now.getTime() - (5 * 60 * 60 * 1000))
+      const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
         .toISOString().split('T')[0]
 
       const res = await fetch(
