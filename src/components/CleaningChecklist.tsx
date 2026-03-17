@@ -9,6 +9,7 @@ const TEAL       = '#00BCD4'
 const TEAL_DARK  = '#0097A7'
 const TEAL_LIGHT = '#E0F7FA'
 const GREEN      = '#4CAF50'
+const STAFF_ID   = 'rec6CVsLgwP3bZuih'
 
 type TabType = 'detalle' | 'inicio' | 'reporte' | 'cierre'
 
@@ -119,10 +120,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [showNewInventory, setShowNewInventory] = useState(false)
   const [newIncName, setNewIncName]     = useState('')
   const [newIncComment, setNewIncComment] = useState('')
-  const [newIncPhotos, setNewIncPhotos] = useState<string[]>([])
+  const [newIncPhoto, setNewIncPhoto]   = useState<string | null>(null)
   const [savingIncident, setSavingIncident] = useState(false)
   const [newInvStatus, setNewInvStatus] = useState<'Low' | 'Out of Stock'>('Low')
   const [newInvComment, setNewInvComment] = useState('')
+  const [newInvPhoto, setNewInvPhoto]   = useState<string | null>(null)
   const [savingInventory, setSavingInventory] = useState(false)
   const [closingPhotos, setClosingPhotos] = useState<{ url: string; filename: string }[]>([])
   const [uploadingClosing, setUploadingClosing] = useState(false)
@@ -136,6 +138,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const videoInputRef   = useRef<HTMLInputElement>(null)
   const closingInputRef = useRef<HTMLInputElement>(null)
   const incPhotoRef     = useRef<HTMLInputElement>(null)
+  const invPhotoRef     = useRef<HTMLInputElement>(null)
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type })
@@ -178,7 +181,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       if (d.videoInicial?.length) { setVideoThumbs(d.videoInicial); setOpenCommentsSaved(true) }
       setOpenComments(d.openComments || '')
       if (d.photosVideos?.length) setClosingPhotos(d.photosVideos)
-      // Load incidents and inventory
       if (d.propertyId) {
         loadIncidents(d.propertyId)
         loadInventory(d.propertyId)
@@ -209,27 +211,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const refMap = { detalle: detalleRef, inicio: inicioRef, reporte: reporteRef, cierre: cierreRef }
     const el = refMap[tab].current
     if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset - 200, behavior: 'smooth' })
-  }
-
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files?.length) return
-    setUploadingVideo(true)
-    try {
-      const formData = new FormData()
-      Array.from(files).forEach(f => formData.append('files', f))
-      const res = await fetch(`/api/uploadFile?cleaningId=${cleaning.id}&type=video`, {
-        method: 'POST', body: formData
-      })
-      if (!res.ok) throw new Error('Upload failed')
-      const { urls } = await res.json()
-      setVideoThumbs(prev => [...prev, ...urls])
-      showToast(`${files.length} archivo(s) subido(s)`)
-    } catch { showToast('Error al subir', 'err') }
-    finally {
-      setUploadingVideo(false)
-      if (videoInputRef.current) videoInputRef.current.value = ''
-    }
   }
 
   const handleRating = async (value: number) => {
@@ -273,25 +254,36 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     finally { setFinishing(false) }
   }
 
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploadingVideo(true)
+    showToast('Upload de video pendiente - próximamente', 'err')
+    setUploadingVideo(false)
+    if (videoInputRef.current) videoInputRef.current.value = ''
+  }
+
   const handleClosingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files?.length) return
-    setUploadingClosing(true)
-    try {
-      const formData = new FormData()
-      Array.from(files).forEach(f => formData.append('files', f))
-      const res = await fetch(`/api/uploadFile?cleaningId=${cleaning.id}&type=closing`, {
-        method: 'POST', body: formData
-      })
-      if (!res.ok) throw new Error()
-      const { urls } = await res.json()
-      setClosingPhotos(prev => [...prev, ...urls.map((url: string, i: number) => ({ url, filename: Array.from(files)[i]?.name || 'archivo' }))])
-      showToast(`${files.length} archivo(s) subido(s)`)
-    } catch { showToast('Error al subir', 'err') }
-    finally {
-      setUploadingClosing(false)
-      if (closingInputRef.current) closingInputRef.current.value = ''
-    }
+    showToast('Upload de fotos pendiente - próximamente', 'err')
+    if (closingInputRef.current) closingInputRef.current.value = ''
+  }
+
+  const handleIncPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setNewIncPhoto(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const handleInvPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setNewInvPhoto(reader.result as string)
+    reader.readAsDataURL(file)
   }
 
   const handleSaveIncident = async () => {
@@ -299,17 +291,22 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setSavingIncident(true)
     const optimistic: Incident = {
       id: `tmp-${Date.now()}`, name: newIncName, status: 'Reported',
-      comment: newIncComment, photoUrls: newIncPhotos,
+      comment: newIncComment, photoUrls: [],
     }
     setIncidents(prev => [optimistic, ...prev])
     setShowNewIncident(false)
-    const name = newIncName; const comment = newIncComment; const photos = newIncPhotos
-    setNewIncName(''); setNewIncComment(''); setNewIncPhotos([])
+    const name = newIncName; const comment = newIncComment
+    setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null)
     try {
       await fetch(`/api/createIncident`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, photoUrls: photos })
+        body: JSON.stringify({
+          name, comment,
+          propertyId: details?.propertyId,
+          cleaningId: cleaning.id,
+          staffId: STAFF_ID,
+        })
       })
       showToast('Incidente registrado')
     } catch {
@@ -327,12 +324,17 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setInventoryRecords(prev => [optimistic, ...prev])
     setShowNewInventory(false)
     const status = newInvStatus; const comment = newInvComment
-    setNewInvStatus('Low'); setNewInvComment('')
+    setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null)
     try {
       await fetch(`/api/addInventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id })
+        body: JSON.stringify({
+          status, comment,
+          propertyId: details?.propertyId,
+          cleaningId: cleaning.id,
+          staffId: STAFF_ID,
+        })
       })
       showToast('Inventario registrado')
     } catch {
@@ -523,8 +525,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         <div ref={inicioRef} style={{ filter: isDone ? 'grayscale(1)' : 'none', opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'all 0.3s' }}>
           <SectionTitle>INICIO</SectionTitle>
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-6">
-
-            {/* Step 1 - Video */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: TEAL }}>1</div>
               <div className="flex-1">
@@ -552,10 +552,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </button>
               </div>
             </div>
-
             <div className="h-px bg-slate-100" />
-
-            {/* Instrucciones */}
             <div className="flex gap-3">
               <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: '#FF9800' }}>
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -607,10 +604,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             </div>
-
             <div className="h-px bg-slate-100" />
-
-            {/* Step 2 - Rating */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
                 style={{ background: rating > 0 ? GREEN : TEAL }}>
@@ -632,10 +626,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             </div>
-
             <div className="h-px bg-slate-100" />
-
-            {/* Step 3 - Start */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
                 style={{ background: isInProgress ? GREEN : TEAL }}>
@@ -660,7 +651,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </div>
             </div>
           </div>
-
           {isInProgress && tasks.length > 0 && (
             <div className="mt-3">
               <TaskChecklist tasks={tasks} completedTasks={completedTasks} onToggle={toggleTask} />
@@ -671,8 +661,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         {/* REPORTE */}
         <div ref={reporteRef}>
           <SectionTitle>REPORTE</SectionTitle>
-
-          {/* Inventario */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-3">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="text-[13px] font-black text-slate-800">Inventario del Cliente</span>
@@ -708,7 +696,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             {!isInProgress && <p className="text-[10px] text-slate-400 text-center pb-3">Inicia la limpieza para registrar</p>}
           </div>
 
-          {/* Incidentes */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="text-[13px] font-black text-slate-800">Incidentes</span>
@@ -792,11 +779,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       </div>
 
-      {/* MODALS */}
+      {/* MODAL INCIDENT DETAIL */}
       {selectedIncident && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
           onClick={() => setSelectedIncident(null)}>
-          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
               <button onClick={() => setSelectedIncident(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
@@ -811,10 +798,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
           onClick={() => setSelectedInventory(null)}>
-          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
               <button onClick={() => setSelectedInventory(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
@@ -828,6 +816,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL NUEVO INCIDENTE */}
       {showNewIncident && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
           onClick={() => setShowNewIncident(false)}>
@@ -839,6 +828,27 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </button>
             </div>
             <div className="px-4 py-3 space-y-3">
+              {/* FOTO PRIMERO */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del incidente</p>
+                {newIncPhoto ? (
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
+                    <img src={newIncPhoto} alt="foto" className="w-full h-full object-cover" />
+                    <button onClick={() => setNewIncPhoto(null)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input ref={incPhotoRef} type="file" accept="image/*" className="hidden" onChange={handleIncPhoto} />
+                    <button onClick={() => incPhotoRef.current?.click()}
+                      className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
+                      <Camera className="w-3.5 h-3.5" /> Agregar foto
+                    </button>
+                  </>
+                )}
+              </div>
               <input type="text" value={newIncName} onChange={e => setNewIncName(e.target.value)}
                 placeholder="Nombre del incidente *"
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all"
@@ -848,7 +858,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 resize-none transition-all"
                 style={{ fontFamily: "'Poppins', sans-serif" }} />
             </div>
-            <div className="px-4 pb-6">
+            <div className="px-4 pb-8">
               <button onClick={handleSaveIncident} disabled={savingIncident}
                 className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 active:scale-95 transition-all"
                 style={{ background: TEAL }}>
@@ -859,6 +869,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL NUEVO INVENTARIO */}
       {showNewInventory && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
           onClick={() => setShowNewInventory(false)}>
@@ -870,6 +881,27 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </button>
             </div>
             <div className="px-4 py-3 space-y-3">
+              {/* FOTO PRIMERO */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del almacen</p>
+                {newInvPhoto ? (
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
+                    <img src={newInvPhoto} alt="foto" className="w-full h-full object-cover" />
+                    <button onClick={() => setNewInvPhoto(null)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input ref={invPhotoRef} type="file" accept="image/*" className="hidden" onChange={handleInvPhoto} />
+                    <button onClick={() => invPhotoRef.current?.click()}
+                      className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
+                      <Camera className="w-3.5 h-3.5" /> Agregar foto
+                    </button>
+                  </>
+                )}
+              </div>
               <div className="flex gap-2">
                 {(['Low', 'Out of Stock'] as const).map(s => (
                   <button key={s} onClick={() => setNewInvStatus(s)}
@@ -885,7 +917,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 resize-none transition-all"
                 style={{ fontFamily: "'Poppins', sans-serif" }} />
             </div>
-            <div className="px-4 pb-6">
+            <div className="px-4 pb-8">
               <button onClick={handleSaveInventory} disabled={savingInventory}
                 className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 active:scale-95 transition-all"
                 style={{ background: TEAL }}>
