@@ -32,9 +32,10 @@ export default async (req) => {
     // Filtro corregido:
     // - Date llega como "2026-03-16" (sin hora) -> comparacion directa funciona
     // - Assigned Staff es array de record IDs -> FIND busca el ID dentro del array joinado
-   const filterFormula = encodeURIComponent(
-    `{Date}="${effectiveDate}"`
-  );
+    const effectiveDateSlash = effectiveDate.replace(/-/g, '/');
+    const filterFormula = encodeURIComponent(
+      `{Date}="${effectiveDateSlash}"`
+    );
 
     const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?filterByFormula=${filterFormula}&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
 
