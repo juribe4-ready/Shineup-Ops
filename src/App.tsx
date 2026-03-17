@@ -62,8 +62,8 @@ export default function App() {
     try {
       // Fecha de hoy en Columbus OH
       const now = new Date()
-      const columbusDate = new Date(now.getTime() - (5 * 60 * 60 * 1000))
-        .toISOString().split('T')[0]
+      const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+        
 
       const res = await fetch(
         `/.netlify/functions/getCleanings?staffId=${TEMP_USER.staffId}&date=${columbusDate}`
