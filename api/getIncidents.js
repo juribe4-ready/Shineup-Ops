@@ -20,6 +20,7 @@ export default async function handler(req, res) {
     const data = await airtableRes.json();
     const allRecords = data.records || [];
 
+    if (allRecords[0]) console.log('[DEBUG] Property field sample:', JSON.stringify(allRecords[0].fields['Property']));
     console.log(`[getIncidents] Total: ${allRecords.length} | propertyId: ${propertyId}`);
 
     const filtered = allRecords.filter(r => {
