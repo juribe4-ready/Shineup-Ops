@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { cleaningId, status, startTime, endTime, rating, openComments } = req.body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const { cleaningId, status, startTime, endTime, rating, openComments } = body;
     if (!cleaningId) return res.status(400).json({ error: 'cleaningId requerido' });
 
     const fields = {};
@@ -16,7 +17,7 @@ export default async function handler(req, res) {
     if (endTime) fields['End Time'] = endTime;
     if (rating !== undefined) {
       const ratingMap = { 1: '⭐ Malo', 2: '⭐⭐ Normal', 3: '⭐⭐⭐ Bueno' };
-      fields['Rating'] = ratingMap[rating] || rating;
+      fields['Rating'] = ratingMap[rating] || String(rating);
     }
     if (openComments !== undefined) fields['OpenComments'] = openComments;
 

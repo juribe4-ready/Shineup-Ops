@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { name, comment, propertyId, cleaningId } = req.body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const { name, comment, propertyId, cleaningId } = body;
     if (!name) return res.status(400).json({ error: 'name requerido' });
 
     const fields = {
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
       photoUrls: [],
     });
   } catch (err) {
+    console.error('[createIncident] Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

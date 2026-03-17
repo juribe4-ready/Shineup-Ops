@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { status, comment, propertyId, cleaningId } = req.body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const { status, comment, propertyId, cleaningId } = body;
 
     const fields = {
       'Status': status || 'Low',
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
     const data = await airtableRes.json();
     return res.status(200).json({ success: true, id: data.id });
   } catch (err) {
+    console.error('[addInventory] Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
