@@ -12,7 +12,6 @@ const GREEN      = '#4CAF50'
 const STAFF_ID   = 'rec6CVsLgwP3bZuih'
 
 type TabType = 'detalle' | 'inicio' | 'reporte' | 'cierre'
-
 interface Task { id: string; taskName: string; taskGroup: string; order: number }
 interface Equipment { text: string; code: string }
 interface CleaningDetails {
@@ -32,7 +31,6 @@ interface InventoryRecord {
   id: string; status: string; comment?: string; date?: string
   photoUrls: string[]; reportedBy?: string
 }
-
 interface Props {
   cleaning: { id: string; propertyText?: string }
   onBack: () => void
@@ -43,6 +41,17 @@ const formatTime = (v?: string | null) => {
   try { return new Date(v).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) }
   catch { return '--:--' }
 }
+
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1]) // solo base64 sin el prefix
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -62,13 +71,10 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
     acc[g].push(t)
     return acc
   }, {})
-
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100">
-        <span className="font-black text-slate-800 text-[13px]">
-          Checklist — {completedTasks.size}/{tasks.length} completadas
-        </span>
+        <span className="font-black text-slate-800 text-[13px]">Checklist — {completedTasks.size}/{tasks.length} completadas</span>
       </div>
       <div className="px-4 py-3 space-y-4">
         {Object.entries(grouped).map(([group, groupTasks]) => (
@@ -84,9 +90,7 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
                       style={{ borderColor: done ? '#00E676' : '#CBD5E1', background: done ? '#00E676' : 'white' }}>
                       {done && <CheckCircle2 className="w-3 h-3 text-white" />}
                     </div>
-                    <span className={`text-[13px] leading-snug ${done ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                      {task.taskName}
-                    </span>
+                    <span className={`text-[13px] leading-snug ${done ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.taskName}</span>
                   </label>
                 )
               })}
@@ -111,6 +115,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [isDone, setIsDone]                 = useState(false)
   const [startingCleaning, setStartingCleaning] = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [uploadingClosing, setUploadingClosing] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   const [incidents, setIncidents]           = useState<Incident[]>([])
   const [inventoryRecords, setInventoryRecords] = useState<InventoryRecord[]>([])
@@ -127,7 +132,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [newInvPhoto, setNewInvPhoto]   = useState<string | null>(null)
   const [savingInventory, setSavingInventory] = useState(false)
   const [closingPhotos, setClosingPhotos] = useState<{ url: string; filename: string }[]>([])
-  const [uploadingClosing, setUploadingClosing] = useState(false)
   const [finishing, setFinishing]           = useState(false)
   const [toast, setToast]                   = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
@@ -181,10 +185,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       if (d.videoInicial?.length) { setVideoThumbs(d.videoInicial); setOpenCommentsSaved(true) }
       setOpenComments(d.openComments || '')
       if (d.photosVideos?.length) setClosingPhotos(d.photosVideos)
-      if (d.propertyId) {
-        loadIncidents(d.propertyId)
-        loadInventory(d.propertyId)
-      }
+      if (d.propertyId) { loadIncidents(d.propertyId); loadInventory(d.propertyId) }
     } catch (err: any) {
       showToast('Error al cargar la limpieza', 'err')
     } finally {
@@ -213,12 +214,71 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset - 200, behavior: 'smooth' })
   }
 
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploadingVideo(true)
+    try {
+      for (const file of Array.from(files)) {
+        const base64 = await fileToBase64(file)
+        const res = await fetch('/api/uploadFile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cleaningId: cleaning.id,
+            type: 'video',
+            filename: file.name,
+            base64,
+            contentType: file.type,
+          })
+        })
+        if (!res.ok) throw new Error('Error al subir')
+        const data = await res.json()
+        if (data.url) setVideoThumbs(prev => [...prev, data.url])
+      }
+      showToast('Archivo(s) subido(s)')
+    } catch { showToast('Error al subir', 'err') }
+    finally {
+      setUploadingVideo(false)
+      if (videoInputRef.current) videoInputRef.current.value = ''
+    }
+  }
+
+  const handleClosingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploadingClosing(true)
+    try {
+      for (const file of Array.from(files)) {
+        const base64 = await fileToBase64(file)
+        const res = await fetch('/api/uploadFile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cleaningId: cleaning.id,
+            type: 'closing',
+            filename: file.name,
+            base64,
+            contentType: file.type,
+          })
+        })
+        if (!res.ok) throw new Error('Error al subir')
+        const data = await res.json()
+        if (data.url) setClosingPhotos(prev => [...prev, { url: data.url, filename: file.name }])
+      }
+      showToast('Archivo(s) subido(s)')
+    } catch { showToast('Error al subir', 'err') }
+    finally {
+      setUploadingClosing(false)
+      if (closingInputRef.current) closingInputRef.current.value = ''
+    }
+  }
+
   const handleRating = async (value: number) => {
     setRating(value)
     try {
       await fetch(`/api/updateCleaning`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, rating: value })
       })
     } catch { showToast('Error al guardar rating', 'err') }
@@ -228,8 +288,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setStartingCleaning(true)
     try {
       await fetch(`/api/updateCleaning`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, startTime: new Date().toISOString(), status: 'In Progress' })
       })
       setIsInProgress(true)
@@ -243,8 +302,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setFinishing(true)
     try {
       await fetch(`/api/updateCleaning`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, endTime: new Date().toISOString(), status: 'Done' })
       })
       setIsDone(true)
@@ -252,22 +310,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       setTimeout(() => onBack(), 1500)
     } catch { showToast('Error al finalizar', 'err') }
     finally { setFinishing(false) }
-  }
-
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files?.length) return
-    setUploadingVideo(true)
-    showToast('Upload de video pendiente - próximamente', 'err')
-    setUploadingVideo(false)
-    if (videoInputRef.current) videoInputRef.current.value = ''
-  }
-
-  const handleClosingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files?.length) return
-    showToast('Upload de fotos pendiente - próximamente', 'err')
-    if (closingInputRef.current) closingInputRef.current.value = ''
   }
 
   const handleIncPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -289,24 +331,15 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleSaveIncident = async () => {
     if (!newIncName.trim()) { showToast('Escribe un nombre para el incidente', 'err'); return }
     setSavingIncident(true)
-    const optimistic: Incident = {
-      id: `tmp-${Date.now()}`, name: newIncName, status: 'Reported',
-      comment: newIncComment, photoUrls: [],
-    }
+    const optimistic: Incident = { id: `tmp-${Date.now()}`, name: newIncName, status: 'Reported', comment: newIncComment, photoUrls: [] }
     setIncidents(prev => [optimistic, ...prev])
     setShowNewIncident(false)
     const name = newIncName; const comment = newIncComment
     setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null)
     try {
       await fetch(`/api/createIncident`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name, comment,
-          propertyId: details?.propertyId,
-          cleaningId: cleaning.id,
-          staffId: STAFF_ID,
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
       })
       showToast('Incidente registrado')
     } catch {
@@ -317,24 +350,15 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
   const handleSaveInventory = async () => {
     setSavingInventory(true)
-    const optimistic: InventoryRecord = {
-      id: `tmp-${Date.now()}`, status: newInvStatus,
-      comment: newInvComment, date: new Date().toISOString(), photoUrls: [],
-    }
+    const optimistic: InventoryRecord = { id: `tmp-${Date.now()}`, status: newInvStatus, comment: newInvComment, date: new Date().toISOString(), photoUrls: [] }
     setInventoryRecords(prev => [optimistic, ...prev])
     setShowNewInventory(false)
     const status = newInvStatus; const comment = newInvComment
     setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null)
     try {
       await fetch(`/api/addInventory`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status, comment,
-          propertyId: details?.propertyId,
-          cleaningId: cleaning.id,
-          staffId: STAFF_ID,
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
       })
       showToast('Inventario registrado')
     } catch {
@@ -359,8 +383,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   ]
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center"
-      style={{ background: `linear-gradient(145deg, ${TEAL_DARK}, ${TEAL})` }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: `linear-gradient(145deg, ${TEAL_DARK}, ${TEAL})` }}>
       <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
     </div>
   )
@@ -368,7 +391,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   return (
     <div className="min-h-screen bg-[#F0F4F8]" style={{ fontFamily: "'Poppins', sans-serif" }}>
 
-      {/* TOAST */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl shadow-lg text-white text-[13px] font-bold"
           style={{ background: toast.type === 'ok' ? '#00C853' : '#F44336' }}>
@@ -376,23 +398,18 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
-      {/* STICKY HEADER */}
+      {/* HEADER */}
       <div className="sticky top-0 z-50 rounded-b-3xl shadow-xl"
         style={{ background: `linear-gradient(145deg, ${TEAL_DARK} 0%, ${TEAL} 60%, #26C6DA 100%)` }}>
         <div className="flex items-center justify-between px-4 pt-10 pb-3">
           <button onClick={onBack}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-transform"
             style={{ background: 'rgba(255,255,255,0.95)', color: TEAL }}>
-            <ArrowLeft className="w-5 h-5" strokeWidth={3} />
-            <span>Volver</span>
+            <ArrowLeft className="w-5 h-5" strokeWidth={3} /><span>Volver</span>
           </button>
           <div className="text-right">
-            <span className="text-white font-black text-base tracking-tight block leading-tight">
-              {(details?.propertyText || 'ShineUP').toUpperCase()}
-            </span>
-            <p className="text-white/80 text-[10px] font-semibold uppercase tracking-wide mt-0.5">
-              {details?.cleaningTypeText || 'Standard STR Turnover'}
-            </p>
+            <span className="text-white font-black text-base tracking-tight block leading-tight">{(details?.propertyText || 'ShineUP').toUpperCase()}</span>
+            <p className="text-white/80 text-[10px] font-semibold uppercase tracking-wide mt-0.5">{details?.cleaningTypeText || 'Standard STR Turnover'}</p>
           </div>
         </div>
         <div className="px-4 pb-2">
@@ -409,10 +426,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             const active = activeTab === key
             return (
               <button key={key} onClick={() => scrollToSection(key)} className="flex flex-col items-center py-2.5 transition-all">
-                <Icon className="w-5 h-5 mb-0.5"
-                  style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)', strokeWidth: active ? 2.5 : 1.5 }} />
-                <span className="text-[9px] font-black tracking-widest"
-                  style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)' }}>{label}</span>
+                <Icon className="w-5 h-5 mb-0.5" style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)', strokeWidth: active ? 2.5 : 1.5 }} />
+                <span className="text-[9px] font-black tracking-widest" style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)' }}>{label}</span>
                 {active && <div className="w-6 h-0.5 rounded-full mt-1" style={{ background: '#00E676' }} />}
               </button>
             )
@@ -455,13 +470,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             )}
             <div className="rounded-xl overflow-hidden border border-slate-200">
               <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="text-left px-4 py-2 font-bold text-slate-400 uppercase tracking-wide"></th>
-                    <th className="text-center px-3 py-2 font-black text-slate-600 uppercase">Progr.</th>
-                    <th className="text-center px-3 py-2 font-black text-slate-600 uppercase">Real</th>
-                  </tr>
-                </thead>
+                <thead><tr className="bg-slate-50">
+                  <th className="text-left px-4 py-2 font-bold text-slate-400 uppercase tracking-wide"></th>
+                  <th className="text-center px-3 py-2 font-black text-slate-600 uppercase">Progr.</th>
+                  <th className="text-center px-3 py-2 font-black text-slate-600 uppercase">Real</th>
+                </tr></thead>
                 <tbody>
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-3 font-semibold text-slate-400 uppercase tracking-wide">INICIO</td>
@@ -534,8 +547,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   <div className="flex flex-wrap gap-2 mb-3">
                     {videoThumbs.map((url, i) => (
                       <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 bg-slate-100" style={{ borderColor: TEAL }}>
-                        <img src={url} alt="video" className="w-full h-full object-cover"
-                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        <img src={url} alt="video" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="text-xl">🎥</span></div>
                         <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
                           <CheckCircle2 className="w-2.5 h-2.5 text-white" />
@@ -569,45 +581,29 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     Notas de apertura
                     {videoThumbs.length > 0 && !openCommentsSaved && <span className="ml-1 text-amber-400">— se guarda al salir</span>}
                   </p>
-                  <textarea
-                    value={openComments}
+                  <textarea value={openComments}
                     onChange={e => { setOpenComments(e.target.value); setOpenCommentsSaved(false) }}
                     onBlur={async () => {
                       if (!openCommentsSaved && videoThumbs.length > 0) {
                         try {
-                          await fetch(`/api/updateCleaning`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ cleaningId: cleaning.id, openComments })
-                          })
+                          await fetch(`/api/updateCleaning`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cleaningId: cleaning.id, openComments }) })
                           setOpenCommentsSaved(true)
                         } catch {}
                       }
                     }}
                     disabled={videoThumbs.length === 0 || openCommentsSaved}
-                    rows={2}
-                    placeholder={videoThumbs.length === 0 ? 'Sube el video para habilitar...' : 'Agrega notas...'}
+                    rows={2} placeholder={videoThumbs.length === 0 ? 'Sube el video para habilitar...' : 'Agrega notas...'}
                     className="w-full px-3 py-2 text-[12px] rounded-xl border transition-all resize-none outline-none"
-                    style={{
-                      fontFamily: "'Poppins', sans-serif",
-                      borderColor: videoThumbs.length === 0 ? '#E2E8F0' : openCommentsSaved ? '#E2E8F0' : '#FF9800',
-                      background: videoThumbs.length === 0 || openCommentsSaved ? '#F8FAFC' : '#FFFBF5',
-                    }}
-                  />
+                    style={{ fontFamily: "'Poppins', sans-serif", borderColor: videoThumbs.length === 0 ? '#E2E8F0' : openCommentsSaved ? '#E2E8F0' : '#FF9800', background: videoThumbs.length === 0 || openCommentsSaved ? '#F8FAFC' : '#FFFBF5' }} />
                   {videoThumbs.length > 0 && openCommentsSaved && (
-                    <button onClick={() => setOpenCommentsSaved(false)}
-                      className="mt-1 px-3 py-1 rounded-lg text-[11px] font-bold"
-                      style={{ background: TEAL_LIGHT, color: TEAL }}>
-                      Modificar
-                    </button>
+                    <button onClick={() => setOpenCommentsSaved(false)} className="mt-1 px-3 py-1 rounded-lg text-[11px] font-bold" style={{ background: TEAL_LIGHT, color: TEAL }}>Modificar</button>
                   )}
                 </div>
               </div>
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
-                style={{ background: rating > 0 ? GREEN : TEAL }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: rating > 0 ? GREEN : TEAL }}>
                 {rating > 0 ? '✓' : '2'}
               </div>
               <div className="flex-1">
@@ -615,10 +611,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 <div className="flex items-center gap-4">
                   {[1, 2, 3].map(v => (
                     <button key={v} onClick={() => handleRating(v)} className="flex flex-col items-center gap-1 active:scale-90 transition-transform">
-                      <Star className="w-10 h-10"
-                        fill={rating >= v ? '#FFD700' : 'none'}
-                        stroke={rating >= v ? '#FFD700' : '#CBD5E1'}
-                        strokeWidth={1.5} />
+                      <Star className="w-10 h-10" fill={rating >= v ? '#FFD700' : 'none'} stroke={rating >= v ? '#FFD700' : '#CBD5E1'} strokeWidth={1.5} />
                       <span className="text-[11px] text-slate-400 font-semibold">{['Malo', 'Regular', 'Bueno'][v - 1]}</span>
                     </button>
                   ))}
@@ -628,8 +621,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
-                style={{ background: isInProgress ? GREEN : TEAL }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: isInProgress ? GREEN : TEAL }}>
                 {isInProgress ? '✓' : '3'}
               </div>
               <div className="flex-1">
@@ -638,13 +630,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   <button onClick={handleStart} disabled={startingCleaning}
                     className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
                     style={{ background: '#00E676' }}>
-                    {startingCleaning
-                      ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      : <><Play className="w-4 h-4" fill="white" /> EMPEZAR LIMPIEZA</>}
+                    {startingCleaning ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><Play className="w-4 h-4" fill="white" /> EMPEZAR LIMPIEZA</>}
                   </button>
                 ) : (
-                  <div className="w-full py-3 rounded-2xl text-white font-bold text-[13px] flex items-center justify-center gap-2"
-                    style={{ background: '#00C853' }}>
+                  <div className="w-full py-3 rounded-2xl text-white font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: '#00C853' }}>
                     <CheckCircle2 className="w-4 h-4" /> {isDone ? 'Limpieza completada' : 'Limpieza en progreso'}
                   </div>
                 )}
@@ -652,9 +641,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
           </div>
           {isInProgress && tasks.length > 0 && (
-            <div className="mt-3">
-              <TaskChecklist tasks={tasks} completedTasks={completedTasks} onToggle={toggleTask} />
-            </div>
+            <div className="mt-3"><TaskChecklist tasks={tasks} completedTasks={completedTasks} onToggle={toggleTask} /></div>
           )}
         </div>
 
@@ -672,21 +659,14 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             <div style={{ opacity: isInProgress ? 1 : 0.55 }}>
               {inventoryRecords.length === 0 ? (
-                <div className="flex flex-col items-center py-8 text-slate-400">
-                  <Package className="w-8 h-8 mb-2 opacity-30" />
-                  <p className="text-[12px]">Sin registros de inventario</p>
-                </div>
+                <div className="flex flex-col items-center py-8 text-slate-400"><Package className="w-8 h-8 mb-2 opacity-30" /><p className="text-[12px]">Sin registros de inventario</p></div>
               ) : (
                 <div className="divide-y divide-slate-50">
                   {inventoryRecords.map(rec => (
-                    <button key={rec.id} onClick={() => setSelectedInventory(rec)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
-                      <div className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: rec.status === 'Out of Stock' ? '#EF4444' : '#F59E0B' }} />
+                    <button key={rec.id} onClick={() => setSelectedInventory(rec)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: rec.status === 'Out of Stock' ? '#EF4444' : '#F59E0B' }} />
                       <span className="flex-1 text-[13px] font-semibold text-slate-700 truncate">{rec.comment || rec.status}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${rec.status === 'Out of Stock' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}`}>
-                        {rec.status}
-                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${rec.status === 'Out of Stock' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}`}>{rec.status}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     </button>
                   ))}
@@ -707,24 +687,14 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             <div style={{ opacity: isInProgress ? 1 : 0.55 }}>
               {incidents.length === 0 ? (
-                <div className="flex flex-col items-center py-8 text-slate-400">
-                  <AlertCircle className="w-8 h-8 mb-2 opacity-30" />
-                  <p className="text-[12px]">Sin incidentes registrados</p>
-                </div>
+                <div className="flex flex-col items-center py-8 text-slate-400"><AlertCircle className="w-8 h-8 mb-2 opacity-30" /><p className="text-[12px]">Sin incidentes registrados</p></div>
               ) : (
                 <div className="divide-y divide-slate-50">
                   {incidents.map(inc => (
-                    <button key={inc.id} onClick={() => setSelectedIncident(inc)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
-                      <div className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: inc.status !== 'Closed' ? '#FBA730' : '#CBD5E1' }} />
+                    <button key={inc.id} onClick={() => setSelectedIncident(inc)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: inc.status !== 'Closed' ? '#FBA730' : '#CBD5E1' }} />
                       <span className="flex-1 text-[13px] font-semibold text-slate-700 truncate">{inc.name}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                        inc.status === 'Reported' ? 'bg-amber-50 text-amber-600' :
-                        inc.status === 'In Progress' ? 'bg-blue-50 text-blue-600' :
-                        'bg-green-50 text-green-600'}`}>
-                        {inc.status}
-                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${inc.status === 'Reported' ? 'bg-amber-50 text-amber-600' : inc.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>{inc.status}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     </button>
                   ))}
@@ -739,18 +709,13 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         <div ref={cierreRef} style={{ filter: isDone ? 'grayscale(1)' : 'none', opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'all 0.3s' }}>
           <SectionTitle>CIERRE</SectionTitle>
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-            <p className="font-bold text-slate-800 text-[15px] leading-snug">
-              Verifica que todo este conforme al Book antes de terminar.
-            </p>
+            <p className="font-bold text-slate-800 text-[15px] leading-snug">Verifica que todo este conforme al Book antes de terminar.</p>
             {closingPhotos.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {closingPhotos.map((photo, i) => (
                   <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 bg-slate-100" style={{ borderColor: TEAL }}>
-                    <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                    <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                      <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                    </div>
+                    <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center"><CheckCircle2 className="w-2.5 h-2.5 text-white" /></div>
                   </div>
                 ))}
               </div>
@@ -761,100 +726,71 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
               style={{ borderColor: isInProgress ? '#94A3B8' : '#CBD5E1', color: isInProgress ? '#64748B' : '#CBD5E1' }}>
               <Camera className="w-4 h-4" />
-              {uploadingClosing ? 'Subiendo...' :
-                details?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos' :
-                details?.closingMediaType?.toLowerCase().includes('video') ? 'Subir Videos' :
-                'Subir fotos / videos'}
+              {uploadingClosing ? 'Subiendo...' : details?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos' : details?.closingMediaType?.toLowerCase().includes('video') ? 'Subir Videos' : 'Subir fotos / videos'}
             </button>
             <button onClick={handleFinish} disabled={!isInProgress || finishing || isDone}
               className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
               style={{ background: isDone ? '#00C853' : isInProgress ? '#F44336' : '#BDBDBD' }}>
-              {isDone
-                ? <><CheckCircle2 className="w-5 h-5" /> LIMPIEZA TERMINADA</>
-                : finishing
-                ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                : '🏁 TERMINAR LIMPIEZA'}
+              {isDone ? <><CheckCircle2 className="w-5 h-5" /> LIMPIEZA TERMINADA</> : finishing ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : '🏁 TERMINAR LIMPIEZA'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* MODAL INCIDENT DETAIL */}
+      {/* MODALS */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setSelectedIncident(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedIncident(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
-              <button onClick={() => setSelectedIncident(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                <X className="w-3 h-3 text-slate-500" />
-              </button>
+              <button onClick={() => setSelectedIncident(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3 h-3 text-slate-500" /></button>
             </div>
             {selectedIncident.comment && <p className="text-[13px] text-slate-600 mb-3">{selectedIncident.comment}</p>}
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
-              {selectedIncident.status}
-            </span>
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>{selectedIncident.status}</span>
           </div>
         </div>
       )}
 
-      {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setSelectedInventory(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedInventory(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
-              <button onClick={() => setSelectedInventory(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                <X className="w-3 h-3 text-slate-500" />
-              </button>
+              <button onClick={() => setSelectedInventory(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3 h-3 text-slate-500" /></button>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'}`}>
-              {selectedInventory.status}
-            </span>
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'}`}>{selectedInventory.status}</span>
           </div>
         </div>
       )}
 
-      {/* MODAL NUEVO INCIDENTE */}
       {showNewIncident && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setShowNewIncident(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewIncident(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="font-black text-slate-800">Nuevo Incidente</span>
-              <button onClick={() => setShowNewIncident(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
-                <X className="w-3.5 h-3.5 text-slate-500" />
-              </button>
+              <button onClick={() => setShowNewIncident(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
             </div>
             <div className="px-4 py-3 space-y-3">
-              {/* FOTO PRIMERO */}
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del incidente</p>
                 {newIncPhoto ? (
                   <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
                     <img src={newIncPhoto} alt="foto" className="w-full h-full object-cover" />
-                    <button onClick={() => setNewIncPhoto(null)}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
-                      <X className="w-3 h-3 text-white" />
-                    </button>
+                    <button onClick={() => setNewIncPhoto(null)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
                   </div>
                 ) : (
                   <>
                     <input ref={incPhotoRef} type="file" accept="image/*" className="hidden" onChange={handleIncPhoto} />
-                    <button onClick={() => incPhotoRef.current?.click()}
-                      className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
+                    <button onClick={() => incPhotoRef.current?.click()} className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
                       <Camera className="w-3.5 h-3.5" /> Agregar foto
                     </button>
                   </>
                 )}
               </div>
-              <input type="text" value={newIncName} onChange={e => setNewIncName(e.target.value)}
-                placeholder="Nombre del incidente *"
+              <input type="text" value={newIncName} onChange={e => setNewIncName(e.target.value)} placeholder="Nombre del incidente *"
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all"
                 style={{ fontFamily: "'Poppins', sans-serif" }} />
-              <textarea value={newIncComment} onChange={e => setNewIncComment(e.target.value)}
-                placeholder="Descripcion..." rows={3}
+              <textarea value={newIncComment} onChange={e => setNewIncComment(e.target.value)} placeholder="Descripcion..." rows={3}
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 resize-none transition-all"
                 style={{ fontFamily: "'Poppins', sans-serif" }} />
             </div>
@@ -869,34 +805,25 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
-      {/* MODAL NUEVO INVENTARIO */}
       {showNewInventory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setShowNewInventory(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewInventory(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="font-black text-slate-800">Nuevo Registro de Inventario</span>
-              <button onClick={() => setShowNewInventory(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
-                <X className="w-3.5 h-3.5 text-slate-500" />
-              </button>
+              <button onClick={() => setShowNewInventory(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
             </div>
             <div className="px-4 py-3 space-y-3">
-              {/* FOTO PRIMERO */}
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del almacen</p>
                 {newInvPhoto ? (
                   <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
                     <img src={newInvPhoto} alt="foto" className="w-full h-full object-cover" />
-                    <button onClick={() => setNewInvPhoto(null)}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
-                      <X className="w-3 h-3 text-white" />
-                    </button>
+                    <button onClick={() => setNewInvPhoto(null)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
                   </div>
                 ) : (
                   <>
                     <input ref={invPhotoRef} type="file" accept="image/*" className="hidden" onChange={handleInvPhoto} />
-                    <button onClick={() => invPhotoRef.current?.click()}
-                      className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
+                    <button onClick={() => invPhotoRef.current?.click()} className="w-full py-2.5 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
                       <Camera className="w-3.5 h-3.5" /> Agregar foto
                     </button>
                   </>
@@ -905,15 +832,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               <div className="flex gap-2">
                 {(['Low', 'Out of Stock'] as const).map(s => (
                   <button key={s} onClick={() => setNewInvStatus(s)}
-                    className={`flex-1 py-2 rounded-xl text-[12px] font-bold border transition-all ${newInvStatus === s
-                      ? s === 'Out of Stock' ? 'bg-red-50 border-red-300 text-red-500' : 'bg-amber-50 border-amber-300 text-amber-600'
-                      : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                    className={`flex-1 py-2 rounded-xl text-[12px] font-bold border transition-all ${newInvStatus === s ? s === 'Out of Stock' ? 'bg-red-50 border-red-300 text-red-500' : 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
                     {s}
                   </button>
                 ))}
               </div>
-              <textarea value={newInvComment} onChange={e => setNewInvComment(e.target.value)}
-                placeholder="Que esta faltando o bajo en stock?" rows={3}
+              <textarea value={newInvComment} onChange={e => setNewInvComment(e.target.value)} placeholder="Que esta faltando o bajo en stock?" rows={3}
                 className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 resize-none transition-all"
                 style={{ fontFamily: "'Poppins', sans-serif" }} />
             </div>
