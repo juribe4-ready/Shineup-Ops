@@ -29,12 +29,8 @@ export default async (req) => {
 
     console.log(`[getCleanings] staffId: ${staffId} | date: ${effectiveDate}`);
 
-    // Filtramos por staff en Airtable, fecha la filtramos en JS
-    const filterFormula = encodeURIComponent(
-      `FIND("${staffId}", ARRAYJOIN({Assigned Staff}, ","))`
-    );
-
-    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?filterByFormula=${filterFormula}&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
+    // Sin filtro en Airtable - traemos todo y filtramos en JS
+    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
 
     console.log(`[getCleanings] Consultando Airtable...`);
 
@@ -54,15 +50,19 @@ export default async (req) => {
     const data = await airtableRes.json();
     const records = data.records || [];
 
-    console.log(`[getCleanings] Records totales del staff: ${records.length}`);
+    console.log(`[getCleanings] Records totales: ${records.length}`);
 
-    // Filtrar por fecha en JS - Date llega como "2026-03-16"
+    // Filtrar por fecha Y staff en JavaScript
     const filtered = records.filter(r => {
-      const d = r.fields['Date'];
-      return d && d.startsWith(effectiveDate);
+      const f = r.fields;
+      const d = f['Date'];
+      const staff = f['Assigned Staff'] || [];
+      const matchDate = d && d.startsWith(effectiveDate);
+      const matchStaff = Array.isArray(staff) && staff.includes(staffId);
+      return matchDate && matchStaff;
     });
 
-    console.log(`[getCleanings] Records para hoy (${effectiveDate}): ${filtered.length}`);
+    console.log(`[getCleanings] Records para hoy con este staff: ${filtered.length}`);
 
     const MONTHS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
 
@@ -94,7 +94,7 @@ export default async (req) => {
       const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
 
       // Fecha formateada
-      const rawDate = f['Date']; // "2026-03-16"
+      const rawDate = f['Date'];
       let formattedDate = '--';
       if (rawDate) {
         const parts = rawDate.split('-');
