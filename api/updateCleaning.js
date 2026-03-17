@@ -1,13 +1,26 @@
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
+async function parseBody(req) {
+  return new Promise((resolve) => {
+    if (req.body && typeof req.body === 'object') return resolve(req.body);
+    if (req.body && typeof req.body === 'string') return resolve(JSON.parse(req.body));
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); }
+      catch { resolve({}); }
+    });
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const body = await parseBody(req);
     const { cleaningId, status, startTime, endTime, rating, openComments } = body;
     if (!cleaningId) return res.status(400).json({ error: 'cleaningId requerido' });
 
@@ -34,6 +47,7 @@ export default async function handler(req, res) {
 
     if (!airtableRes.ok) {
       const err = await airtableRes.text();
+      console.error('[updateCleaning] Airtable error:', err);
       return res.status(500).json({ error: 'Error Airtable', detail: err });
     }
 

@@ -1,23 +1,38 @@
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
+async function parseBody(req) {
+  return new Promise((resolve) => {
+    if (req.body && typeof req.body === 'object') return resolve(req.body);
+    if (req.body && typeof req.body === 'string') return resolve(JSON.parse(req.body));
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); }
+      catch { resolve({}); }
+    });
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const body = await parseBody(req);
     const { status, comment, propertyId, cleaningId } = body;
+
+    console.log('[addInventory]', { status, comment, propertyId, cleaningId });
 
     const fields = {
       'Status': status || 'Low',
       'Comment': comment || '',
     };
     if (propertyId) fields['Property'] = [propertyId];
-    if (cleaningId) fields['Cleaning'] = [cleaningId];
+    if (cleaningId) fields['Cleanings'] = [cleaningId];
 
-    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblClientInventory`, {
+    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
@@ -28,6 +43,7 @@ export default async function handler(req, res) {
 
     if (!airtableRes.ok) {
       const err = await airtableRes.text();
+      console.error('[addInventory] Airtable error:', err);
       return res.status(500).json({ error: 'Error Airtable', detail: err });
     }
 
