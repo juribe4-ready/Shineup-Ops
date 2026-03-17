@@ -1,6 +1,8 @@
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
+console.log('TOKEN:', AIRTABLE_TOKEN ? 'existe' : 'UNDEFINED');
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
