@@ -21,9 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const body = await parseBody(req);
-    const { status, comment, propertyId, cleaningId } = body;
-
-    console.log('[addInventory]', { status, comment, propertyId, cleaningId });
+    const { status, comment, propertyId, cleaningId, staffId } = body;
 
     const fields = {
       'Status': status || 'Low',
@@ -31,6 +29,7 @@ export default async function handler(req, res) {
     };
     if (propertyId) fields['Property'] = [propertyId];
     if (cleaningId) fields['Cleanings'] = [cleaningId];
+    if (staffId) fields['Reported By'] = [staffId];
 
     const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory`, {
       method: 'POST',
@@ -43,14 +42,12 @@ export default async function handler(req, res) {
 
     if (!airtableRes.ok) {
       const err = await airtableRes.text();
-      console.error('[addInventory] Airtable error:', err);
       return res.status(500).json({ error: 'Error Airtable', detail: err });
     }
 
     const data = await airtableRes.json();
     return res.status(200).json({ success: true, id: data.id });
   } catch (err) {
-    console.error('[addInventory] Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
