@@ -29,36 +29,52 @@ export default async (req) => {
 
     console.log(`[getCleanings] staffId: ${staffId} | date: ${effectiveDate}`);
 
-    // Sin filtro en Airtable - traemos todo y filtramos en JS
-    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
+    // Paginacion - traer TODOS los registros superando el limite de 100
+    let allRecords = [];
+    let offset = null;
 
-    console.log(`[getCleanings] Consultando Airtable...`);
+    do {
+      const pageUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?pageSize=100&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc${offset ? `&offset=${offset}` : ''}`;
 
-    const airtableRes = await fetch(airtableUrl, {
-      headers: {
-        'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
-        'Content-Type': 'application/json',
+      const airtableRes = await fetch(pageUrl, {
+        headers: {
+          'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!airtableRes.ok) {
+        const err = await airtableRes.text();
+        console.error('[getCleanings] Airtable error:', err);
+        return new Response(JSON.stringify({ error: 'Error Airtable', detail: err }), { status: 500, headers });
       }
-    });
 
-    if (!airtableRes.ok) {
-      const err = await airtableRes.text();
-      console.error('[getCleanings] Airtable error:', err);
-      return new Response(JSON.stringify({ error: 'Error Airtable', detail: err }), { status: 500, headers });
-    }
+      const pageData = await airtableRes.json();
+      allRecords = allRecords.concat(pageData.records || []);
+      offset = pageData.offset || null;
 
-    const data = await airtableRes.json();
-    const records = data.records || [];
+      console.log(`[getCleanings] Pagina cargada: ${pageData.records?.length} | Total hasta ahora: ${allRecords.length} | offset: ${offset ? 'hay mas' : 'fin'}`);
 
-    console.log(`[getCleanings] Records totales: ${records.length}`);
+      // Si ya encontramos registros de hoy y ya pasamos la fecha, parar
+      const hasToday = allRecords.some(r => r.fields['Date'] && r.fields['Date'].startsWith(effectiveDate));
+      const hasFuture = allRecords.some(r => r.fields['Date'] && r.fields['Date'] > effectiveDate);
+      if (hasToday && hasFuture) {
+        console.log(`[getCleanings] Encontramos registros de hoy y futuros - parando paginacion`);
+        offset = null;
+      }
+
+    } while (offset);
+
+    console.log(`[getCleanings] Total records traidos: ${allRecords.length}`);
 
     // Filtrar por fecha Y staff en JavaScript
-    const filtered = records.filter(r => {
+    const filtered = allRecords.filter(r => {
       const f = r.fields;
       const d = f['Date'];
       const staff = f['Assigned Staff'] || [];
       const matchDate = d && d.startsWith(effectiveDate);
       const matchStaff = Array.isArray(staff) && staff.includes(staffId);
+      console.log(`[FILTER] ${r.id} date:${d} matchDate:${matchDate} staff:${JSON.stringify(staff)} matchStaff:${matchStaff}`);
       return matchDate && matchStaff;
     });
 
@@ -69,7 +85,6 @@ export default async (req) => {
     const cleanings = filtered.map(record => {
       const f = record.fields;
 
-      // Foto - FrontView tiene thumbnails
       const frontView = f['FrontView'] || [];
       const attachments = Array.isArray(frontView)
         ? frontView.filter(a => a?.url).map(a => ({
@@ -77,23 +92,19 @@ export default async (req) => {
           }))
         : [];
 
-      // Address llega como array ["4190 Broadway, Grove City..."]
       const addressRaw = f['Address'];
       const address = Array.isArray(addressRaw)
         ? addressRaw[0]
         : (addressRaw || 'Direccion no disponible');
 
-      // staffList ya viene como texto "Juan, Damaris"
       const staffListRaw = f['staffList'] || '';
       const staffList = typeof staffListRaw === 'string'
         ? staffListRaw.split(',').map(s => s.trim()).filter(Boolean)
         : [];
 
-      // Equipment count
       const equipment = f['Equipment'] || [];
       const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
 
-      // Fecha formateada
       const rawDate = f['Date'];
       let formattedDate = '--';
       if (rawDate) {
@@ -118,7 +129,6 @@ export default async (req) => {
       };
     });
 
-    // Ordenar: Done al final
     cleanings.sort((a, b) => {
       if (a.status === 'Done' && b.status !== 'Done') return 1;
       if (a.status !== 'Done' && b.status === 'Done') return -1;
