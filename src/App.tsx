@@ -1,17 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Calendar as CalendarIcon, Search, LogOut } from 'lucide-react'
+import { Calendar as CalendarIcon, Search } from 'lucide-react'
 import CleaningCard from './components/CleaningCard'
+import CleaningChecklist from './components/CleaningChecklist'
 
 const TEAL      = '#00BCD4'
 const TEAL_DARK = '#0097A7'
 
-// ─────────────────────────────────────────────
-// TEMPORAL: Auth simulada hasta integrar auth real
-// Cuando tengas auth, reemplaza esto con tu sistema
-// ─────────────────────────────────────────────
 const TEMP_USER = {
-  // PON AQUI el Staff record ID de tu usuario de prueba en Airtable
-  // Lo encuentras en la tabla Staff de tu base appBwnoxgyIXILe6M
   staffId: 'rec6CVsLgwP3bZuih',
   firstName: 'Juan',
   initials: 'JR',
@@ -33,15 +28,15 @@ interface Cleaning {
 }
 
 export default function App() {
-  const [cleanings, setCleanings]     = useState<Cleaning[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [currentTime, setCurrentTime] = useState(
+  const [cleanings, setCleanings]           = useState<Cleaning[]>([])
+  const [loading, setLoading]               = useState(true)
+  const [error, setError]                   = useState<string | null>(null)
+  const [searchQuery, setSearchQuery]       = useState('')
+  const [selectedCleaning, setSelectedCleaning] = useState<any | null>(null)
+  const [currentTime, setCurrentTime]       = useState(
     new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
   )
 
-  // Reloj en vivo
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))
@@ -49,7 +44,6 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // Cargar limpiezas desde Netlify Function
   useEffect(() => {
     loadCleanings()
   }, [])
@@ -58,23 +52,17 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      // Fecha de hoy en Columbus OH
-      const now = new Date()
       const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-
       const res = await fetch(
         `/api/getCleanings?staffId=${TEMP_USER.staffId}&date=${columbusDate}`
       )
-
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || 'Error al cargar limpiezas')
       }
-
       const data: Cleaning[] = await res.json()
       setCleanings(data)
     } catch (err: any) {
-      console.error(err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -112,6 +100,14 @@ export default function App() {
 
   const ringBg = `conic-gradient(#00E676 ${stats.percent}%, rgba(255,255,255,0.28) ${stats.percent}% 100%)`
 
+  // Abrir CleaningChecklist al tocar una card
+  if (selectedCleaning) return (
+    <CleaningChecklist
+      cleaning={selectedCleaning}
+      onBack={() => { setSelectedCleaning(null); loadCleanings() }}
+    />
+  )
+
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-12">
 
@@ -120,7 +116,6 @@ export default function App() {
         className="relative rounded-b-[36px] shadow-xl"
         style={{ background: `linear-gradient(145deg, ${TEAL_DARK} 0%, ${TEAL} 60%, #26C6DA 100%)` }}
       >
-        {/* Decorative circle */}
         <div style={{
           position: 'absolute', top: '-40px', right: '-40px',
           width: '180px', height: '180px', borderRadius: '50%',
@@ -130,7 +125,7 @@ export default function App() {
 
         <div className="relative px-5 pt-12 pb-5" style={{ zIndex: 2 }}>
 
-          {/* Top row: logo + avatar */}
+          {/* Top row */}
           <div className="flex justify-between items-center mb-4">
             <div>
               <h1 className="text-4xl font-[950] text-white tracking-tighter leading-none drop-shadow-sm">
@@ -140,7 +135,6 @@ export default function App() {
                 {greeting()}, <span className="font-bold text-white">{TEMP_USER.firstName} 👋</span>
               </p>
             </div>
-
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div style={{
                 width: 52, height: 52, borderRadius: '50%',
@@ -148,7 +142,6 @@ export default function App() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <button
-                  onClick={() => alert('Logout pendiente - falta integrar auth')}
                   style={{
                     width: '100%', height: '100%', borderRadius: '50%',
                     background: 'rgba(30,160,175,0.85)',
@@ -164,7 +157,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Date + time pills */}
+          {/* Date + time */}
           <div className="flex items-center gap-2 mb-4">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[11px] font-semibold"
               style={{ background: 'rgba(0,0,0,0.15)' }}>
@@ -184,10 +177,10 @@ export default function App() {
           {/* Stats */}
           <div className="grid grid-cols-4 gap-1.5 mb-4">
             {[
-              { label: 'Total',       value: stats.total,      color: '#E0F7FA' },
+              { label: 'Total',        value: stats.total,      color: '#E0F7FA' },
               { label: 'No iniciadas', value: stats.programmed, color: '#FFCCBC' },
-              { label: 'Progreso',    value: stats.inProgress, color: '#B2EBF2' },
-              { label: 'Terminadas',  value: stats.done,       color: '#FFD700' },
+              { label: 'Progreso',     value: stats.inProgress, color: '#B2EBF2' },
+              { label: 'Terminadas',   value: stats.done,       color: '#FFD700' },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-xl px-2 py-2 flex flex-col items-center"
                 style={{ background: 'rgba(255,255,255,0.13)', backdropFilter: 'blur(6px)' }}>
@@ -230,7 +223,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Estados */}
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-9 h-9 border-[3px] border-slate-100 rounded-full animate-spin"
@@ -264,7 +256,7 @@ export default function App() {
               <div key={cleaning.id} className="flex">
                 <CleaningCard
                   cleaning={cleaning}
-                  onClick={() => console.log('Abrir cleaning:', cleaning.id)}
+                  onClick={() => setSelectedCleaning(cleaning)}
                 />
               </div>
             ))}
