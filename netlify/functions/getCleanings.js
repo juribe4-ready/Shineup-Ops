@@ -38,7 +38,7 @@ export default async (req) => {
     const filterFormula = encodeURIComponent(
       `AND(
         FIND("${staffId}", ARRAYJOIN({Assigned Staff}, ",")),
-        IS_SAME({Date}, "${effectiveDate}", "day")
+        {Date} = "${effectiveDate}"
       )`
     );
 
