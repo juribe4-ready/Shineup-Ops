@@ -29,12 +29,9 @@ export default async (req) => {
 
     console.log(`[getCleanings] staffId: ${staffId} | date: ${effectiveDate}`);
 
-    // Filtro corregido:
-    // - Date llega como "2026-03-16" (sin hora) -> comparacion directa funciona
-    // - Assigned Staff es array de record IDs -> FIND busca el ID dentro del array joinado
-    const effectiveDateSlash = effectiveDate.replace(/-/g, '/');
+    // Filtramos por staff en Airtable, fecha la filtramos en JS
     const filterFormula = encodeURIComponent(
-      `{Date}="${effectiveDateSlash}"`
+      `FIND("${staffId}", ARRAYJOIN({Assigned Staff}, ","))`
     );
 
     const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?filterByFormula=${filterFormula}&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
@@ -57,11 +54,19 @@ export default async (req) => {
     const data = await airtableRes.json();
     const records = data.records || [];
 
-    console.log(`[getCleanings] Records encontrados: ${records.length}`);
+    console.log(`[getCleanings] Records totales del staff: ${records.length}`);
+
+    // Filtrar por fecha en JS - Date llega como "2026-03-16"
+    const filtered = records.filter(r => {
+      const d = r.fields['Date'];
+      return d && d.startsWith(effectiveDate);
+    });
+
+    console.log(`[getCleanings] Records para hoy (${effectiveDate}): ${filtered.length}`);
 
     const MONTHS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
 
-    const cleanings = records.map(record => {
+    const cleanings = filtered.map(record => {
       const f = record.fields;
 
       // Foto - FrontView tiene thumbnails
@@ -79,7 +84,7 @@ export default async (req) => {
         : (addressRaw || 'Direccion no disponible');
 
       // staffList ya viene como texto "Juan, Damaris"
-      const staffListRaw = f['staffList'] || f['Assigned Staff'] || '';
+      const staffListRaw = f['staffList'] || '';
       const staffList = typeof staffListRaw === 'string'
         ? staffListRaw.split(',').map(s => s.trim()).filter(Boolean)
         : [];
