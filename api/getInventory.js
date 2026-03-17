@@ -10,7 +10,6 @@ export default async function handler(req, res) {
     const { propertyId } = req.query;
     if (!propertyId) return res.status(200).json([]);
 
-    // Traer todos y filtrar en JS
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory?sort[0][field]=Date&sort[0][direction]=desc`;
 
     const airtableRes = await fetch(url, {
@@ -43,13 +42,13 @@ export default async function handler(req, res) {
         status: f['Status'] || 'Low',
         comment: f['Comment'] || f['Item'] || '',
         date: f['Date'] || null,
-        photoUrls: Array.isArray(photos) ? photos.map((p: any) => p?.url || '').filter(Boolean) : [],
+        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
 
     return res.status(200).json(records);
-  } catch (err: any) {
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
