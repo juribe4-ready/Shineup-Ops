@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ShineUP Ops</title>
+
+  <!-- ═══ PWA ═══ -->
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- iOS específico (Safari no lee el manifest completamente) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ShineUP">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+
+  <!-- Color de la barra del sistema -->
+  <meta name="theme-color" content="#00e5a0">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -713,6 +725,17 @@ function finishJob() {
   document.getElementById('view-checklist').classList.remove('active');
   document.getElementById('view-home').classList.add('active');
 }
+</script>
+
+<!-- ═══ SERVICE WORKER REGISTRATION ═══ -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(reg => console.log('[SW] Registrado:', reg.scope))
+        .catch(err => console.log('[SW] Error:', err));
+    });
+  }
 </script>
 </body>
 </html>
