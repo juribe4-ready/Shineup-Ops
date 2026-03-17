@@ -10,7 +10,6 @@ export default async function handler(req, res) {
     const { propertyId } = req.query;
     if (!propertyId) return res.status(200).json([]);
 
-    // Traer todos y filtrar en JS - mas confiable que formulas con linked records
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/Incidents?sort[0][field]=Creation Date&sort[0][direction]=desc`;
 
     const airtableRes = await fetch(url, {
@@ -27,7 +26,6 @@ export default async function handler(req, res) {
       const f = r.fields;
       const prop = f['Property'];
       const status = f['Status'] || '';
-      // Property puede ser string o array
       const propMatch = Array.isArray(prop)
         ? prop.includes(propertyId)
         : prop === propertyId;
@@ -45,13 +43,13 @@ export default async function handler(req, res) {
         status: f['Status'] || 'Reported',
         creationDate: f['Creation Date'] || null,
         comment: f['Comment'] || '',
-        photoUrls: Array.isArray(photos) ? photos.map((p: any) => p?.url || '').filter(Boolean) : [],
+        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
 
     return res.status(200).json(incidents);
-  } catch (err: any) {
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
