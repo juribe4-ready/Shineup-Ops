@@ -1,4 +1,4 @@
-// netlify/functions/getCleanings.js - VERSION DEBUG
+// netlify/functions/getCleanings.js
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
@@ -15,13 +15,30 @@ export default async (req) => {
 
   try {
     const url = new URL(req.url);
-    const staffId = url.searchParams.get('staffId');
     const date = url.searchParams.get('date');
+    const staffId = url.searchParams.get('staffId');
 
-    console.log(`[getCleanings] staffId: ${staffId} | date: ${date}`);
+    if (!staffId) {
+      return new Response(JSON.stringify({ error: 'staffId requerido' }), { status: 400, headers });
+    }
 
-    // SIN FILTRO - trae los primeros 3 registros para ver el formato crudo
-    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?maxRecords=3`;
+    // Fecha efectiva - Columbus OH (UTC-5)
+    const now = new Date();
+    const columbusTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    const effectiveDate = date || columbusTime.toISOString().split('T')[0];
+
+    console.log(`[getCleanings] staffId: ${staffId} | date: ${effectiveDate}`);
+
+    // Filtro corregido:
+    // - Date llega como "2026-03-16" (sin hora) -> comparacion directa funciona
+    // - Assigned Staff es array de record IDs -> FIND busca el ID dentro del array joinado
+    const filterFormula = encodeURIComponent(
+      `AND(FIND("${staffId}", ARRAYJOIN({Assigned Staff}, ",")), {Date}="${effectiveDate}")`
+    );
+
+    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?filterByFormula=${filterFormula}&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
+
+    console.log(`[getCleanings] Consultando Airtable...`);
 
     const airtableRes = await fetch(airtableUrl, {
       headers: {
@@ -41,16 +58,68 @@ export default async (req) => {
 
     console.log(`[getCleanings] Records encontrados: ${records.length}`);
 
-    // LOG CRUDO - ver exactamente como llegan los datos de Airtable
-    if (records[0]) {
-      console.log('[DEBUG] Primer record ID:', records[0].id);
-      console.log('[DEBUG] Primer record fields:', JSON.stringify(records[0].fields));
-    }
+    const MONTHS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
 
-    return new Response(JSON.stringify(records.map(r => ({
-      id: r.id,
-      fields: r.fields
-    }))), { status: 200, headers });
+    const cleanings = records.map(record => {
+      const f = record.fields;
+
+      // Foto - FrontView tiene thumbnails
+      const frontView = f['FrontView'] || [];
+      const attachments = Array.isArray(frontView)
+        ? frontView.filter(a => a?.url).map(a => ({
+            url: a?.thumbnails?.large?.url || a.url
+          }))
+        : [];
+
+      // Address llega como array ["4190 Broadway, Grove City..."]
+      const addressRaw = f['Address'];
+      const address = Array.isArray(addressRaw)
+        ? addressRaw[0]
+        : (addressRaw || 'Direccion no disponible');
+
+      // staffList ya viene como texto "Juan, Damaris"
+      const staffListRaw = f['staffList'] || f['Assigned Staff'] || '';
+      const staffList = typeof staffListRaw === 'string'
+        ? staffListRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+      // Equipment count
+      const equipment = f['Equipment'] || [];
+      const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
+
+      // Fecha formateada
+      const rawDate = f['Date']; // "2026-03-16"
+      let formattedDate = '--';
+      if (rawDate) {
+        const parts = rawDate.split('-');
+        const month = parseInt(parts[1]);
+        const day = parseInt(parts[2]);
+        formattedDate = `${day} ${MONTHS[month - 1]}`;
+      }
+
+      return {
+        id: record.id,
+        propertyText: f['Property Text'] || 'Propiedad sin nombre',
+        address,
+        status: f['Status'] || 'Programmed',
+        date: rawDate || null,
+        formattedDate,
+        scheduledTime: f['Scheduled Time'] || null,
+        notes: f['OpenComments'] || '',
+        staffList,
+        equipmentCount,
+        attachments,
+      };
+    });
+
+    // Ordenar: Done al final
+    cleanings.sort((a, b) => {
+      if (a.status === 'Done' && b.status !== 'Done') return 1;
+      if (a.status !== 'Done' && b.status === 'Done') return -1;
+      return 0;
+    });
+
+    return new Response(JSON.stringify(cleanings), { status: 200, headers });
 
   } catch (err) {
     console.error('[getCleanings] Error:', err);
