@@ -61,7 +61,6 @@ export default function App() {
       // Fecha de hoy en Columbus OH
       const now = new Date()
       const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-        .toISOString().split('T')[0]
 
       const res = await fetch(
         `/api/getCleanings?staffId=${TEMP_USER.staffId}&date=${columbusDate}`
