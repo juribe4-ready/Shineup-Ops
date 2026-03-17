@@ -166,7 +166,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const loadDetails = async () => {
     try {
       setLoading(true)
-      const res = await fetch(`/.netlify/functions/getCleaningTasks?cleaningId=${cleaning.id}`)
+      const res = await fetch(`/api/getCleaningTasks?cleaningId=${cleaning.id}`)
       if (!res.ok) throw new Error('Error al cargar')
       const result = await res.json()
       const d = result.cleaning
@@ -192,14 +192,14 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
   const loadIncidents = async (propertyId: string) => {
     try {
-      const res = await fetch(`/.netlify/functions/getIncidents?propertyId=${propertyId}`)
+      const res = await fetch(`/api/getIncidents?propertyId=${propertyId}`)
       if (res.ok) setIncidents(await res.json())
     } catch {}
   }
 
   const loadInventory = async (propertyId: string) => {
     try {
-      const res = await fetch(`/.netlify/functions/getInventory?propertyId=${propertyId}`)
+      const res = await fetch(`/api/getInventory?propertyId=${propertyId}`)
       if (res.ok) setInventoryRecords(await res.json())
     } catch {}
   }
@@ -218,7 +218,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     try {
       const formData = new FormData()
       Array.from(files).forEach(f => formData.append('files', f))
-      const res = await fetch(`/.netlify/functions/uploadFile?cleaningId=${cleaning.id}&type=video`, {
+      const res = await fetch(`/api/uploadFile?cleaningId=${cleaning.id}&type=video`, {
         method: 'POST', body: formData
       })
       if (!res.ok) throw new Error('Upload failed')
@@ -235,7 +235,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleRating = async (value: number) => {
     setRating(value)
     try {
-      await fetch(`/.netlify/functions/updateCleaning`, {
+      await fetch(`/api/updateCleaning`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, rating: value })
@@ -246,7 +246,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleStart = async () => {
     setStartingCleaning(true)
     try {
-      await fetch(`/.netlify/functions/updateCleaning`, {
+      await fetch(`/api/updateCleaning`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, startTime: new Date().toISOString(), status: 'In Progress' })
@@ -261,7 +261,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleFinish = async () => {
     setFinishing(true)
     try {
-      await fetch(`/.netlify/functions/updateCleaning`, {
+      await fetch(`/api/updateCleaning`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, endTime: new Date().toISOString(), status: 'Done' })
@@ -280,7 +280,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     try {
       const formData = new FormData()
       Array.from(files).forEach(f => formData.append('files', f))
-      const res = await fetch(`/.netlify/functions/uploadFile?cleaningId=${cleaning.id}&type=closing`, {
+      const res = await fetch(`/api/uploadFile?cleaningId=${cleaning.id}&type=closing`, {
         method: 'POST', body: formData
       })
       if (!res.ok) throw new Error()
@@ -306,7 +306,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const name = newIncName; const comment = newIncComment; const photos = newIncPhotos
     setNewIncName(''); setNewIncComment(''); setNewIncPhotos([])
     try {
-      await fetch(`/.netlify/functions/createIncident`, {
+      await fetch(`/api/createIncident`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, photoUrls: photos })
@@ -329,7 +329,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const status = newInvStatus; const comment = newInvComment
     setNewInvStatus('Low'); setNewInvComment('')
     try {
-      await fetch(`/.netlify/functions/addInventory`, {
+      await fetch(`/api/addInventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id })
@@ -578,7 +578,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     onBlur={async () => {
                       if (!openCommentsSaved && videoThumbs.length > 0) {
                         try {
-                          await fetch(`/.netlify/functions/updateCleaning`, {
+                          await fetch(`/api/updateCleaning`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ cleaningId: cleaning.id, openComments })
