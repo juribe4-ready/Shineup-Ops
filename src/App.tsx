@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Calendar as CalendarIcon, Search, LogOut } from 'lucide-react'
-import CleaningChecklist from './components/CleaningChecklist'
 import CleaningCard from './components/CleaningCard'
 
 const TEAL      = '#00BCD4'
@@ -13,7 +12,7 @@ const TEAL_DARK = '#0097A7'
 const TEMP_USER = {
   // PON AQUI el Staff record ID de tu usuario de prueba en Airtable
   // Lo encuentras en la tabla Staff de tu base appBwnoxgyIXILe6M
-  staffId: 'rec6CVsLgwP3bZuih',
+  staffId: 'REEMPLAZA_CON_TU_STAFF_RECORD_ID',
   firstName: 'Juan',
   initials: 'JR',
   email: 'juan@shineup.com',
@@ -37,7 +36,6 @@ export default function App() {
   const [cleanings, setCleanings]     = useState<Cleaning[]>([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState<string | null>(null)
-  const [selectedCleaning, setSelectedCleaning] = useState<any | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
@@ -62,11 +60,11 @@ export default function App() {
     try {
       // Fecha de hoy en Columbus OH
       const now = new Date()
-      const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-        
+      const columbusDate = new Date(now.getTime() - (5 * 60 * 60 * 1000))
+        .toISOString().split('T')[0]
 
       const res = await fetch(
-        `/.netlify/functions/getCleanings?staffId=${TEMP_USER.staffId}&date=${columbusDate}`
+        `/api/getCleanings?staffId=${TEMP_USER.staffId}&date=${columbusDate}`
       )
 
       if (!res.ok) {
@@ -100,14 +98,6 @@ export default function App() {
     const percent    = total > 0 ? Math.round((done / total) * 100) : 0
     return { total, done, inProgress, programmed, percent }
   }, [cleanings])
-
-
-  if (selectedCleaning) return (
-    <CleaningChecklist
-      cleaning={selectedCleaning}
-      onBack={() => { setSelectedCleaning(null); loadCleanings() }}
-    />
-  )
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -275,7 +265,7 @@ export default function App() {
               <div key={cleaning.id} className="flex">
                 <CleaningCard
                   cleaning={cleaning}
-                  onClick={() => setSelectedCleaning(cleaning)}
+                  onClick={() => console.log('Abrir cleaning:', cleaning.id)}
                 />
               </div>
             ))}
