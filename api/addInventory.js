@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       fields['MediaURL'] = photoUrl;
     }
 
-    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory`, {
+    const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblppdLDDnyT0eye9`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${AIRTABLE_TOKEN}`,

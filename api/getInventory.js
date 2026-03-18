@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     const { propertyId } = req.query;
     if (!propertyId) return res.status(200).json([]);
 
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory?sort[0][field]=Date&sort[0][direction]=desc`;
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblppdLDDnyT0eye9?sort[0][field]=Date&sort[0][direction]=desc`;
 
     const airtableRes = await fetch(url, {
       headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
@@ -19,7 +19,6 @@ export default async function handler(req, res) {
 
     const data = await airtableRes.json();
     const allRecords = data.records || [];
-    if (allRecords[0]) console.log('[DEBUG inv]', JSON.stringify(allRecords[0].fields['Property']));
 
     console.log(`[getInventory] Total: ${allRecords.length} | propertyId: ${propertyId}`);
 
