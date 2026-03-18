@@ -840,16 +840,22 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       )}
 
       {/* MODAL INCIDENT DETAIL */}
-      {selectedIncident && (() => { console.log('DEBUG photoUrls:', JSON.stringify(selectedIncident.photoUrls)); return null })()}
       {selectedIncident && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setSelectedIncident(null)}>
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-3">
-              <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
-              <button onClick={() => setSelectedIncident(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            {selectedIncident.photoUrls && selectedIncident.photoUrls.length > 0 && (
+              <div className="w-full h-48 bg-slate-100">
+                <img src={selectedIncident.photoUrls[0]} alt="foto incidente" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-2">
+                <p className="font-black text-[16px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
+                <button onClick={() => setSelectedIncident(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
+              </div>
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full inline-block mb-3 ${selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>{selectedIncident.status}</span>
+              {selectedIncident.comment && <p className="text-[13px] text-slate-600 leading-relaxed">{selectedIncident.comment}</p>}
             </div>
-            {selectedIncident.comment && <p className="text-[13px] text-slate-600 mb-3">{selectedIncident.comment}</p>}
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>{selectedIncident.status}</span>
           </div>
         </div>
       )}
