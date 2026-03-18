@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     const incidents = filtered.map(r => {
       const f = r.fields;
       const photos = f['Photos'] || [];
+      if (photos.length > 0) console.log('[DEBUG photos]', JSON.stringify(photos[0]));
       return {
         id: r.id,
         name: f['Name'] || 'Sin nombre',
