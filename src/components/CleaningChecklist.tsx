@@ -5,9 +5,6 @@ import {
   Plus, X, AlertCircle, ChevronRight
 } from 'lucide-react'
 
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile, toBlobURL } from '@ffmpeg/util'
-
 const TEAL       = '#00BCD4'
 const TEAL_DARK  = '#0097A7'
 const TEAL_LIGHT = '#E0F7FA'
@@ -224,10 +221,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
   const [closingProgress, setClosingProgress] = useState(0)
-  const [compressingVideo, setCompressingVideo] = useState(false)
-  const [compressProgress, setCompressProgress] = useState(0)
-  const [compressingClosing, setCompressingClosing] = useState(false)
-  const [compressClosingProgress, setCompressClosingProgress] = useState(0)
+  const [videoSizeWarning, setVideoSizeWarning] = useState(0)
   const [uploadingClosing, setUploadingClosing] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   const [incidents, setIncidents]           = useState<Incident[]>([])
@@ -330,17 +324,20 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files?.length) return
+    // Verificar tamaño antes de subir
+    const file = files[0]
+    const sizeMB = file.size / (1024 * 1024)
+    if (isVideoFile(file) && sizeMB > MAX_UPLOAD_MB) {
+      setVideoSizeWarning(Math.round(sizeMB))
+      if (videoInputRef.current) videoInputRef.current.value = ''
+      return
+    }
     setUploadingVideo(true)
     setVideoProgress(0)
     try {
-      for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(
-          file,
-          (pct) => setVideoProgress(pct),
-          setCompressingVideo,
-          setCompressProgress
-        )
-        await saveUrlToAirtable(cleaning.id, 'video', url, file.name)
+      for (const f of Array.from(files)) {
+        const url = await uploadToCloudinary(f, (pct) => setVideoProgress(pct))
+        await saveUrlToAirtable(cleaning.id, 'video', url, f.name)
         setVideoThumbs(prev => [...prev, url])
       }
       showToast('Video subido correctamente')
@@ -360,15 +357,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setUploadingClosing(true)
     setClosingProgress(0)
     try {
-      for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(
-          file,
-          (pct) => setClosingProgress(pct),
-          setCompressingClosing,
-          setCompressClosingProgress
-        )
-        await saveUrlToAirtable(cleaning.id, 'closing', url, file.name)
-        setClosingPhotos(prev => [...prev, { url, filename: file.name }])
+      for (const f of Array.from(files)) {
+        const url = await uploadToCloudinary(f, (pct) => setClosingProgress(pct))
+        await saveUrlToAirtable(cleaning.id, 'closing', url, f.name)
+        setClosingPhotos(prev => [...prev, { url, filename: f.name }])
       }
       showToast('Archivo subido correctamente')
     } catch (err: any) {
@@ -664,18 +656,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   </div>
                 )}
                 <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
-                {compressingVideo && (
-                  <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <div className="flex justify-between text-[11px] text-amber-700 mb-1 font-bold">
-                      <span>⚡ Comprimiendo video...</span><span>{compressProgress}%</span>
-                    </div>
-                    <div className="h-2 bg-amber-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-300" style={{ width: `${compressProgress}%`, background: '#F59E0B' }} />
-                    </div>
-                    <p className="text-[10px] text-amber-600 mt-1">Esto puede tomar 30-60 segundos...</p>
-                  </div>
-                )}
-                {uploadingVideo && !compressingVideo && (
+                {uploadingVideo && (
                   <div className="mb-3">
                     <div className="flex justify-between text-[11px] text-slate-500 mb-1">
                       <span>Subiendo...</span><span>{videoProgress}%</span>
@@ -685,10 +666,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     </div>
                   </div>
                 )}
-                <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo || compressingVideo}
+                <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo}
                   className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: (uploadingVideo || compressingVideo) ? 0.6 : 1 }}>
-                  <Camera className="w-4 h-4" /> {compressingVideo ? `Comprimiendo ${compressProgress}%...` : uploadingVideo ? `Subiendo ${videoProgress}%...` : 'Seleccionar video / foto'}
+                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: uploadingVideo ? 0.6 : 1 }}>
+                  <Camera className="w-4 h-4" /> {uploadingVideo ? `Subiendo ${videoProgress}%...` : 'Seleccionar video / foto'}
                 </button>
               </div>
             </div>
@@ -874,6 +855,32 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
           </div>
         </div>
       </div>
+
+      {/* SIZE WARNING MODAL */}
+      {videoSizeWarning > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-xs">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">⚠️</span>
+              <p className="font-black text-slate-800 text-[15px]">Video muy grande</p>
+            </div>
+            <p className="text-[13px] text-slate-600 mb-3">
+              Tu video pesa <span className="font-bold text-red-500">{videoSizeWarning}MB</span>. El límite es 100MB.
+            </p>
+            <div className="bg-amber-50 rounded-xl px-3 py-2.5 mb-4 border border-amber-100">
+              <p className="text-[11px] font-bold text-amber-700 mb-1">📱 Cómo grabar en 1080p:</p>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Configuración → Cámara → Grabar Video → <span className="font-bold">1080p a 30 fps</span>
+              </p>
+            </div>
+            <button onClick={() => setVideoSizeWarning(0)}
+              className="w-full py-2.5 rounded-xl text-white font-black text-[13px]"
+              style={{ background: TEAL }}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODALS */}
       {selectedIncident && (
