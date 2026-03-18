@@ -56,13 +56,7 @@ const uploadToCloudinary = async (
   formData.append('upload_preset', CLOUDINARY_PRESET)
   formData.append('folder', 'shineup-ops')
 
-  // Si es video, limitar calidad
-  if (file.type.startsWith('video/')) {
-    formData.append('resource_type', 'video')
-    formData.append('transformation', JSON.stringify([
-      { quality: 'auto:low', width: 1280, crop: 'limit' }
-    ]))
-  }
+  const resourceType = file.type.startsWith('video/') ? 'video' : 'image'
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -78,7 +72,6 @@ const uploadToCloudinary = async (
       }
     }
     xhr.onerror = () => reject(new Error('Upload error'))
-    const resourceType = file.type.startsWith('video/') ? 'video' : 'image'
     xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`)
     xhr.send(formData)
   })
