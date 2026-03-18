@@ -5,6 +5,9 @@ import {
   Plus, X, AlertCircle, ChevronRight
 } from 'lucide-react'
 
+import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { fetchFile, toBlobURL } from '@ffmpeg/util'
+
 const TEAL       = '#00BCD4'
 const TEAL_DARK  = '#0097A7'
 const TEAL_LIGHT = '#E0F7FA'
@@ -47,7 +50,51 @@ const CLOUDINARY_PRESET = 'shineup-ops'
 
 // Comprime video antes de subir usando canvas (para videos cortos)
 // Para videos largos simplemente los sube directamente
-const uploadToCloudinary = async (
+const isVideoFile = (file: File) =>
+  file.type.startsWith('video/') ||
+  /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(file.name)
+
+const MAX_DIRECT_UPLOAD_MB = 80
+
+const compressVideoWithFFmpeg = async (
+  file: File,
+  onProgress: (pct: number) => void
+): Promise<File> => {
+  const ffmpeg = new FFmpeg()
+
+  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  })
+
+  ffmpeg.on('progress', ({ progress }) => {
+    onProgress(Math.round(progress * 100))
+  })
+
+  const inputName = 'input' + file.name.substring(file.name.lastIndexOf('.'))
+  const outputName = 'output.mp4'
+
+  await ffmpeg.writeFile(inputName, await fetchFile(file))
+
+  await ffmpeg.exec([
+    '-i', inputName,
+    '-vcodec', 'libx264',
+    '-crf', '28',
+    '-preset', 'fast',
+    '-vf', 'scale=1280:-2',
+    '-acodec', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    outputName
+  ])
+
+  const data = await ffmpeg.readFile(outputName)
+  const blob = new Blob([data], { type: 'video/mp4' })
+  return new File([blob], outputName, { type: 'video/mp4' })
+}
+
+const uploadFileToCloudinary = async (
   file: File,
   onProgress: (pct: number) => void
 ): Promise<string> => {
@@ -56,7 +103,7 @@ const uploadToCloudinary = async (
   formData.append('upload_preset', CLOUDINARY_PRESET)
   formData.append('folder', 'shineup-ops')
 
-  const resourceType = file.type.startsWith('video/') ? 'video' : 'image'
+  const resourceType = isVideoFile(file) ? 'video' : 'image'
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -75,6 +122,33 @@ const uploadToCloudinary = async (
     xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`)
     xhr.send(formData)
   })
+}
+
+const uploadToCloudinary = async (
+  file: File,
+  onProgress: (pct: number) => void,
+  setCompressing?: (v: boolean) => void,
+  setCompressProgress?: (v: number) => void
+): Promise<string> => {
+  const sizeMB = file.size / (1024 * 1024)
+
+  if (isVideoFile(file) && sizeMB > MAX_DIRECT_UPLOAD_MB) {
+    // Comprimir con FFmpeg primero
+    setCompressing?.(true)
+    setCompressProgress?.(0)
+    try {
+      const compressed = await compressVideoWithFFmpeg(file, (pct) => {
+        setCompressProgress?.(pct)
+      })
+      setCompressing?.(false)
+      return await uploadFileToCloudinary(compressed, onProgress)
+    } catch (err) {
+      setCompressing?.(false)
+      throw err
+    }
+  }
+
+  return await uploadFileToCloudinary(file, onProgress)
 }
 
 const saveUrlToAirtable = async (cleaningId: string, type: string, publicUrl: string, filename: string) => {
@@ -150,6 +224,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
   const [closingProgress, setClosingProgress] = useState(0)
+  const [compressingVideo, setCompressingVideo] = useState(false)
+  const [compressProgress, setCompressProgress] = useState(0)
+  const [compressingClosing, setCompressingClosing] = useState(false)
+  const [compressClosingProgress, setCompressClosingProgress] = useState(0)
   const [uploadingClosing, setUploadingClosing] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   const [incidents, setIncidents]           = useState<Incident[]>([])
@@ -256,7 +334,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setVideoProgress(0)
     try {
       for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(file, (pct) => setVideoProgress(pct))
+        const url = await uploadToCloudinary(
+          file,
+          (pct) => setVideoProgress(pct),
+          setCompressingVideo,
+          setCompressProgress
+        )
         await saveUrlToAirtable(cleaning.id, 'video', url, file.name)
         setVideoThumbs(prev => [...prev, url])
       }
@@ -278,7 +361,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setClosingProgress(0)
     try {
       for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(file, (pct) => setClosingProgress(pct))
+        const url = await uploadToCloudinary(
+          file,
+          (pct) => setClosingProgress(pct),
+          setCompressingClosing,
+          setCompressClosingProgress
+        )
         await saveUrlToAirtable(cleaning.id, 'closing', url, file.name)
         setClosingPhotos(prev => [...prev, { url, filename: file.name }])
       }
@@ -576,7 +664,18 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   </div>
                 )}
                 <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
-                {uploadingVideo && (
+                {compressingVideo && (
+                  <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                    <div className="flex justify-between text-[11px] text-amber-700 mb-1 font-bold">
+                      <span>⚡ Comprimiendo video...</span><span>{compressProgress}%</span>
+                    </div>
+                    <div className="h-2 bg-amber-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-300" style={{ width: `${compressProgress}%`, background: '#F59E0B' }} />
+                    </div>
+                    <p className="text-[10px] text-amber-600 mt-1">Esto puede tomar 30-60 segundos...</p>
+                  </div>
+                )}
+                {uploadingVideo && !compressingVideo && (
                   <div className="mb-3">
                     <div className="flex justify-between text-[11px] text-slate-500 mb-1">
                       <span>Subiendo...</span><span>{videoProgress}%</span>
@@ -586,10 +685,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     </div>
                   </div>
                 )}
-                <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo}
+                <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo || compressingVideo}
                   className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: uploadingVideo ? 0.6 : 1 }}>
-                  <Camera className="w-4 h-4" /> {uploadingVideo ? `Subiendo ${videoProgress}%...` : 'Seleccionar video / foto'}
+                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: (uploadingVideo || compressingVideo) ? 0.6 : 1 }}>
+                  <Camera className="w-4 h-4" /> {compressingVideo ? `Comprimiendo ${compressProgress}%...` : uploadingVideo ? `Subiendo ${videoProgress}%...` : 'Seleccionar video / foto'}
                 </button>
               </div>
             </div>
