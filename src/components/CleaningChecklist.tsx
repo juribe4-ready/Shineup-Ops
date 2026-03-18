@@ -779,11 +779,19 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             <p className="text-[13px] text-slate-600 mb-3">
               Tu video pesa <span className="font-bold text-red-500">{videoSizeWarning}MB</span>. El límite es 100MB.
             </p>
-            <div className="bg-amber-50 rounded-xl px-3 py-2.5 mb-4 border border-amber-100">
-              <p className="text-[11px] font-bold text-amber-700 mb-1">📱 Cómo grabar en 1080p en iPhone:</p>
-              <p className="text-[11px] text-amber-700 leading-relaxed">
-                Configuración → Cámara → Grabar Video → <span className="font-bold">1080p a 30 fps</span>
-              </p>
+            <div className="space-y-2 mb-4">
+              <div className="bg-amber-50 rounded-xl px-3 py-2.5 border border-amber-100">
+                <p className="text-[11px] font-bold text-amber-700 mb-1">🍎 iPhone:</p>
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Configuración → Cámara → Grabar Video → <span className="font-bold">1080p a 30 fps</span>
+                </p>
+              </div>
+              <div className="bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
+                <p className="text-[11px] font-bold text-blue-700 mb-1">🤖 Android:</p>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  Abre Cámara → Configuración (⚙️) → Calidad de video → <span className="font-bold">FHD 1080p</span>
+                </p>
+              </div>
             </div>
             <button onClick={() => setVideoSizeWarning(0)}
               className="w-full py-2.5 rounded-xl text-white font-black text-[13px]"
