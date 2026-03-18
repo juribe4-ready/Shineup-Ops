@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         status: f['Status'] || 'Reported',
         creationDate: f['Creation Date'] || null,
         comment: f['Comment'] || '',
-        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
+        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || p?.thumbnails?.large?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
