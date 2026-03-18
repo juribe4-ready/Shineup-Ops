@@ -573,15 +573,25 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 <p className="text-[12px] text-slate-400 mb-3">Registra como encontraste la propiedad</p>
                 {videoThumbs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {videoThumbs.map((url, i) => (
-                      <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 bg-slate-100" style={{ borderColor: TEAL }}>
-                        <img src={url} alt="video" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="text-xl">🎥</span></div>
-                        <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                          <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                    {videoThumbs.map((url, i) => {
+                      const isVideo = url.includes('video') || url.endsWith('.mp4') || url.endsWith('.mov')
+                      return (
+                        <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 flex items-center justify-center"
+                          style={{ borderColor: TEAL, background: isVideo ? '#0F172A' : '#F1F5F9' }}>
+                          {isVideo ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-2xl">🎥</span>
+                              <span className="text-[8px] text-white font-bold">VIDEO</span>
+                            </div>
+                          ) : (
+                            <img src={url} alt="foto" className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                            <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
                 {uploadingVideo && (
