@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     const videoInicial = Array.isArray(videoInicialRaw)
       ? videoInicialRaw.map(v => v?.thumbnails?.large?.url || v?.url || '').filter(Boolean) : [];
 
-    const photosVideosRaw = f['PhotosVideos'] || f['Photos Videos'] || f['Closing Photos'] || [];
+    const photosVideosRaw = f['Photos & Videos'] || f['PhotosVideos'] || f['Photos Videos'] || [];
     const photosVideos = Array.isArray(photosVideosRaw)
       ? photosVideosRaw.filter(p => p?.url).map(p => ({ url: p.url, filename: p.filename || 'archivo' })) : [];
 
