@@ -42,14 +42,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'cleaningId y filename requeridos' });
     }
 
-    console.log(`[uploadFile] cleaningId: ${cleaningId} | type: ${type} | filename: ${filename}`);
-
     const timestamp = Date.now();
     const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${type}/${cleaningId}/${timestamp}_${safeName}`;
 
-    // Extraer region del endpoint: s3.us-east-005.backblazeb2.com -> us-east-005
+    // Path style: s3.us-east-005.backblazeb2.com/bucket/key
     const region = ENDPOINT.replace('s3.', '').replace('.backblazeb2.com', '');
+    const host = ENDPOINT; // s3.us-east-005.backblazeb2.com
+    const canonicalUri = `/${BUCKET_NAME}/${key}`;
 
     const now = new Date();
     const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -67,8 +67,6 @@ export default async function handler(req, res) {
       'X-Amz-SignedHeaders': 'host',
     });
 
-    const host = `${BUCKET_NAME}.${ENDPOINT}`;
-    const canonicalUri = `/${key}`;
     const canonicalQueryString = queryParams.toString();
     const canonicalHeaders = `host:${host}\n`;
     const signedHeaders = 'host';
@@ -95,10 +93,11 @@ export default async function handler(req, res) {
 
     queryParams.append('X-Amz-Signature', signature);
 
+    // Path style URLs
     const presignedUrl = `https://${host}${canonicalUri}?${queryParams.toString()}`;
     const publicUrl = `https://${host}${canonicalUri}`;
 
-    console.log(`[uploadFile] Presigned URL generada para: ${key}`);
+    console.log(`[uploadFile] Presigned URL (path style) para: ${key}`);
 
     return res.status(200).json({ presignedUrl, publicUrl, key });
 
