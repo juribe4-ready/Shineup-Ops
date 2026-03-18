@@ -10,6 +10,9 @@ const TEAL_DARK  = '#0097A7'
 const TEAL_LIGHT = '#E0F7FA'
 const GREEN      = '#4CAF50'
 const STAFF_ID   = 'rec6CVsLgwP3bZuih'
+const CLOUDINARY_CLOUD  = 'dw93dwwrh'
+const CLOUDINARY_PRESET = 'shineup-ops'
+const MAX_UPLOAD_MB = 100
 
 type TabType = 'detalle' | 'inicio' | 'reporte' | 'cierre'
 interface Task { id: string; taskName: string; taskGroup: string; order: number }
@@ -42,66 +45,16 @@ const formatTime = (v?: string | null) => {
   catch { return '--:--' }
 }
 
-const CLOUDINARY_CLOUD = 'dw93dwwrh'
-const CLOUDINARY_PRESET = 'shineup-ops'
-
-// Comprime video antes de subir usando canvas (para videos cortos)
-// Para videos largos simplemente los sube directamente
 const isVideoFile = (file: File) =>
   file.type.startsWith('video/') ||
   /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(file.name)
 
-const MAX_DIRECT_UPLOAD_MB = 80
-
-const compressVideoWithFFmpeg = async (
-  file: File,
-  onProgress: (pct: number) => void
-): Promise<File> => {
-  const ffmpeg = new FFmpeg()
-
-  const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd'
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  })
-
-  ffmpeg.on('progress', ({ progress }) => {
-    onProgress(Math.round(progress * 100))
-  })
-
-  const inputName = 'input' + file.name.substring(file.name.lastIndexOf('.'))
-  const outputName = 'output.mp4'
-
-  await ffmpeg.writeFile(inputName, await fetchFile(file))
-
-  await ffmpeg.exec([
-    '-i', inputName,
-    '-vcodec', 'libx264',
-    '-crf', '28',
-    '-preset', 'fast',
-    '-vf', 'scale=1280:-2',
-    '-acodec', 'aac',
-    '-b:a', '128k',
-    '-movflags', '+faststart',
-    outputName
-  ])
-
-  const data = await ffmpeg.readFile(outputName)
-  const blob = new Blob([data as unknown as BlobPart], { type: 'video/mp4' })
-  return new File([blob], outputName, { type: 'video/mp4' })
-}
-
-const uploadFileToCloudinary = async (
-  file: File,
-  onProgress: (pct: number) => void
-): Promise<string> => {
+const uploadToCloudinary = (file: File, onProgress: (pct: number) => void): Promise<string> => {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('upload_preset', CLOUDINARY_PRESET)
   formData.append('folder', 'shineup-ops')
-
   const resourceType = isVideoFile(file) ? 'video' : 'image'
-
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.upload.onprogress = (e) => {
@@ -109,10 +62,9 @@ const uploadFileToCloudinary = async (
     }
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const data = JSON.parse(xhr.responseText)
-        resolve(data.secure_url)
+        resolve(JSON.parse(xhr.responseText).secure_url)
       } else {
-        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`))
+        reject(new Error(`Upload failed: ${xhr.status}`))
       }
     }
     xhr.onerror = () => reject(new Error('Upload error'))
@@ -121,40 +73,12 @@ const uploadFileToCloudinary = async (
   })
 }
 
-const uploadToCloudinary = async (
-  file: File,
-  onProgress: (pct: number) => void,
-  setCompressing?: (v: boolean) => void,
-  setCompressProgress?: (v: number) => void
-): Promise<string> => {
-  const sizeMB = file.size / (1024 * 1024)
-
-  if (isVideoFile(file) && sizeMB > MAX_DIRECT_UPLOAD_MB) {
-    // Comprimir con FFmpeg primero
-    setCompressing?.(true)
-    setCompressProgress?.(0)
-    try {
-      const compressed = await compressVideoWithFFmpeg(file, (pct) => {
-        setCompressProgress?.(pct)
-      })
-      setCompressing?.(false)
-      return await uploadFileToCloudinary(compressed, onProgress)
-    } catch (err) {
-      setCompressing?.(false)
-      throw err
-    }
-  }
-
-  return await uploadFileToCloudinary(file, onProgress)
-}
-
 const saveUrlToAirtable = async (cleaningId: string, type: string, publicUrl: string, filename: string) => {
-  const res = await fetch('/api/saveFileUrl', {
+  await fetch('/api/saveFileUrl', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ cleaningId, type, publicUrl, filename })
   })
-  if (!res.ok) throw new Error('Error guardando en Airtable')
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -219,10 +143,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [isDone, setIsDone]                 = useState(false)
   const [startingCleaning, setStartingCleaning] = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
-  const [videoProgress, setVideoProgress] = useState(0)
+  const [videoProgress, setVideoProgress]   = useState(0)
+  const [uploadingClosing, setUploadingClosing] = useState(false)
   const [closingProgress, setClosingProgress] = useState(0)
   const [videoSizeWarning, setVideoSizeWarning] = useState(0)
-  const [uploadingClosing, setUploadingClosing] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   const [incidents, setIncidents]           = useState<Incident[]>([])
   const [inventoryRecords, setInventoryRecords] = useState<InventoryRecord[]>([])
@@ -293,11 +217,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       setOpenComments(d.openComments || '')
       if (d.photosVideos?.length) setClosingPhotos(d.photosVideos)
       if (d.propertyId) { loadIncidents(d.propertyId); loadInventory(d.propertyId) }
-    } catch (err: any) {
-      showToast('Error al cargar la limpieza', 'err')
-    } finally {
-      setLoading(false)
-    }
+    } catch { showToast('Error al cargar la limpieza', 'err') }
+    finally { setLoading(false) }
   }
 
   const loadIncidents = async (propertyId: string) => {
@@ -324,7 +245,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files?.length) return
-    // Verificar tamaño antes de subir
     const file = files[0]
     const sizeMB = file.size / (1024 * 1024)
     if (isVideoFile(file) && sizeMB > MAX_UPLOAD_MB) {
@@ -341,10 +261,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         setVideoThumbs(prev => [...prev, url])
       }
       showToast('Video subido correctamente')
-    } catch (err: any) {
-      console.error(err)
-      showToast('Error al subir video', 'err')
-    } finally {
+    } catch { showToast('Error al subir video', 'err') }
+    finally {
       setUploadingVideo(false)
       setVideoProgress(0)
       if (videoInputRef.current) videoInputRef.current.value = ''
@@ -363,10 +281,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         setClosingPhotos(prev => [...prev, { url, filename: f.name }])
       }
       showToast('Archivo subido correctamente')
-    } catch (err: any) {
-      console.error(err)
-      showToast('Error al subir archivo', 'err')
-    } finally {
+    } catch { showToast('Error al subir archivo', 'err') }
+    finally {
       setUploadingClosing(false)
       setClosingProgress(0)
       if (closingInputRef.current) closingInputRef.current.value = ''
@@ -376,7 +292,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleRating = async (value: number) => {
     setRating(value)
     try {
-      await fetch(`/api/updateCleaning`, {
+      await fetch('/api/updateCleaning', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, rating: value })
       })
@@ -386,7 +302,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleStart = async () => {
     setStartingCleaning(true)
     try {
-      await fetch(`/api/updateCleaning`, {
+      await fetch('/api/updateCleaning', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, startTime: new Date().toISOString(), status: 'In Progress' })
       })
@@ -400,7 +316,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleFinish = async () => {
     setFinishing(true)
     try {
-      await fetch(`/api/updateCleaning`, {
+      await fetch('/api/updateCleaning', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cleaningId: cleaning.id, endTime: new Date().toISOString(), status: 'Done' })
       })
@@ -436,7 +352,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const name = newIncName; const comment = newIncComment
     setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null)
     try {
-      await fetch(`/api/createIncident`, {
+      await fetch('/api/createIncident', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
       })
@@ -455,7 +371,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const status = newInvStatus; const comment = newInvComment
     setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null)
     try {
-      await fetch(`/api/addInventory`, {
+      await fetch('/api/addInventory', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
       })
@@ -655,7 +571,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     ))}
                   </div>
                 )}
-                <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
                 {uploadingVideo && (
                   <div className="mb-3">
                     <div className="flex justify-between text-[11px] text-slate-500 mb-1">
@@ -666,6 +581,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     </div>
                   </div>
                 )}
+                <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
                 <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo}
                   className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
                   style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: uploadingVideo ? 0.6 : 1 }}>
@@ -686,16 +602,13 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                    Notas de apertura
-                    {videoThumbs.length > 0 && !openCommentsSaved && <span className="ml-1 text-amber-400">— se guarda al salir</span>}
-                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Notas de apertura</p>
                   <textarea value={openComments}
                     onChange={e => { setOpenComments(e.target.value); setOpenCommentsSaved(false) }}
                     onBlur={async () => {
                       if (!openCommentsSaved && videoThumbs.length > 0) {
                         try {
-                          await fetch(`/api/updateCleaning`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cleaningId: cleaning.id, openComments }) })
+                          await fetch('/api/updateCleaning', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cleaningId: cleaning.id, openComments }) })
                           setOpenCommentsSaved(true)
                         } catch {}
                       }
@@ -784,7 +697,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             {!isInProgress && <p className="text-[10px] text-slate-400 text-center pb-3">Inicia la limpieza para registrar</p>}
           </div>
-
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="text-[13px] font-black text-slate-800">Incidentes</span>
@@ -829,9 +741,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 ))}
               </div>
             )}
-            <input ref={closingInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleClosingUpload} />
             {uploadingClosing && (
-              <div className="mb-2">
+              <div>
                 <div className="flex justify-between text-[11px] text-slate-500 mb-1">
                   <span>Subiendo...</span><span>{closingProgress}%</span>
                 </div>
@@ -840,6 +751,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             )}
+            <input ref={closingInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleClosingUpload} />
             <button onClick={() => isInProgress && !isDone && !uploadingClosing && closingInputRef.current?.click()}
               disabled={!isInProgress || uploadingClosing || isDone}
               className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
@@ -868,7 +780,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               Tu video pesa <span className="font-bold text-red-500">{videoSizeWarning}MB</span>. El límite es 100MB.
             </p>
             <div className="bg-amber-50 rounded-xl px-3 py-2.5 mb-4 border border-amber-100">
-              <p className="text-[11px] font-bold text-amber-700 mb-1">📱 Cómo grabar en 1080p:</p>
+              <p className="text-[11px] font-bold text-amber-700 mb-1">📱 Cómo grabar en 1080p en iPhone:</p>
               <p className="text-[11px] text-amber-700 leading-relaxed">
                 Configuración → Cámara → Grabar Video → <span className="font-bold">1080p a 30 fps</span>
               </p>
@@ -882,7 +794,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
-      {/* MODALS */}
+      {/* MODAL INCIDENT DETAIL */}
       {selectedIncident && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedIncident(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
@@ -896,6 +808,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedInventory(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
@@ -908,6 +821,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL NUEVO INCIDENTE */}
       {showNewIncident && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewIncident(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
@@ -950,6 +864,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
+      {/* MODAL NUEVO INVENTARIO */}
       {showNewInventory && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewInventory(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
