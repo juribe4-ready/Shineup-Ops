@@ -840,7 +840,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       )}
 
       {/* MODAL INCIDENT DETAIL */}
-      {selectedIncident && console.log('DEBUG photoUrls:', JSON.stringify(selectedIncident.photoUrls))}
+      {selectedIncident && (() => { console.log('DEBUG photoUrls:', JSON.stringify(selectedIncident.photoUrls)); return null })()}
       {selectedIncident && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setSelectedIncident(null)}>
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
