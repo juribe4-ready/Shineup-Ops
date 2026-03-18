@@ -6,6 +6,7 @@ import CleaningChecklist from './components/CleaningChecklist'
 const TEAL      = '#00BCD4'
 const TEAL_DARK = '#0097A7'
 
+// v2
 const TEMP_USER = {
   staffId: 'rec6CVsLgwP3bZuih',
   firstName: 'Juan',
