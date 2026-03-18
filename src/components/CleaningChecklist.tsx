@@ -817,7 +817,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL INCIDENT DETAIL */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedIncident(null)}>
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedIncident(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
@@ -831,7 +831,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedInventory(null)}>
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedInventory(null)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
