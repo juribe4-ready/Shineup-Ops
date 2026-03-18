@@ -42,7 +42,7 @@ export default async function handler(req, res) {
         status: f['Status'] || 'Low',
         comment: f['Comment'] || f['Item'] || '',
         date: f['Date'] || null,
-        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
+        photoUrls: f['MediaURL'] ? [f['MediaURL']] : Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });

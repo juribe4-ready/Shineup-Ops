@@ -32,7 +32,10 @@ export default async function handler(req, res) {
     if (propertyId) fields['Property'] = [propertyId];
     if (cleaningId) fields['Cleaning ID'] = [cleaningId];
     if (staffId) fields['Reported By'] = [staffId];
-    if (photoUrl) fields['Photos'] = [{ url: photoUrl }];
+    if (photoUrl) {
+      fields['Photos'] = [{ url: photoUrl }];
+      fields['MediaURL'] = photoUrl;
+    }
 
     const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Incidents`, {
       method: 'POST',
