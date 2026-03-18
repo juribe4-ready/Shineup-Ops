@@ -573,15 +573,25 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 <p className="text-[12px] text-slate-400 mb-3">Registra como encontraste la propiedad</p>
                 {videoThumbs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {videoThumbs.map((url, i) => (
-                      <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 bg-slate-100" style={{ borderColor: TEAL }}>
-                        <img src={url} alt="video" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="text-xl">🎥</span></div>
-                        <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                          <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                    {videoThumbs.map((url, i) => {
+                      const isVideo = url.includes('video') || url.endsWith('.mp4') || url.endsWith('.mov')
+                      return (
+                        <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 flex items-center justify-center"
+                          style={{ borderColor: TEAL, background: isVideo ? '#0F172A' : '#F1F5F9' }}>
+                          {isVideo ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-2xl">🎥</span>
+                              <span className="text-[8px] text-white font-bold">VIDEO</span>
+                            </div>
+                          ) : (
+                            <img src={url} alt="foto" className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                            <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
                 {uploadingVideo && (
@@ -746,12 +756,26 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             <p className="font-bold text-slate-800 text-[15px] leading-snug">Verifica que todo este conforme al Book antes de terminar.</p>
             {closingPhotos.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {closingPhotos.map((photo, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 bg-slate-100" style={{ borderColor: TEAL }}>
-                    <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                    <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center"><CheckCircle2 className="w-2.5 h-2.5 text-white" /></div>
-                  </div>
-                ))}
+                {closingPhotos.map((photo, i) => {
+                  const isVid = photo.url.includes('/video/') || photo.filename?.match(/\.(mp4|mov|avi|webm)$/i)
+                  return (
+                    <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 flex items-center justify-center"
+                      style={{ borderColor: TEAL, background: isVid ? '#0F172A' : '#F1F5F9' }}>
+                      {isVid ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-2xl">🎥</span>
+                          <span className="text-[8px] text-white font-bold">VIDEO</span>
+                        </div>
+                      ) : (
+                        <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      )}
+                      <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
             {uploadingClosing && (
@@ -783,7 +807,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* SIZE WARNING MODAL */}
       {videoSizeWarning > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-xs">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xl">⚠️</span>
@@ -817,11 +841,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL INCIDENT DETAIL */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedIncident(null)}>
-          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setSelectedIncident(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedIncident.name}</p>
-              <button onClick={() => setSelectedIncident(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3 h-3 text-slate-500" /></button>
+              <button onClick={() => setSelectedIncident(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
             </div>
             {selectedIncident.comment && <p className="text-[13px] text-slate-600 mb-3">{selectedIncident.comment}</p>}
             <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>{selectedIncident.status}</span>
@@ -831,11 +855,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setSelectedInventory(null)}>
-          <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setSelectedInventory(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
-              <button onClick={() => setSelectedInventory(null)} className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3 h-3 text-slate-500" /></button>
+              <button onClick={() => setSelectedInventory(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
             </div>
             <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'}`}>{selectedInventory.status}</span>
           </div>
@@ -844,7 +868,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL NUEVO INCIDENTE */}
       {showNewIncident && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewIncident(false)}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewIncident(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="font-black text-slate-800">Nuevo Incidente</span>
@@ -887,7 +911,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
       {/* MODAL NUEVO INVENTARIO */}
       {showNewInventory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewInventory(false)}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewInventory(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="font-black text-slate-800">Nuevo Registro de Inventario</span>
