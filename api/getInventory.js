@@ -19,6 +19,7 @@ export default async function handler(req, res) {
 
     const data = await airtableRes.json();
     const allRecords = data.records || [];
+    if (allRecords[0]) console.log('[DEBUG inv]', JSON.stringify(allRecords[0].fields['Property']));
 
     console.log(`[getInventory] Total: ${allRecords.length} | propertyId: ${propertyId}`);
 
