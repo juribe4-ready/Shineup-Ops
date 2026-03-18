@@ -90,7 +90,7 @@ const compressVideoWithFFmpeg = async (
   ])
 
   const data = await ffmpeg.readFile(outputName)
-  const blob = new Blob([data as Uint8Array], { type: 'video/mp4' })
+  const blob = new Blob([new Uint8Array(data as ArrayBuffer)], { type: 'video/mp4' })
   return new File([blob], outputName, { type: 'video/mp4' })
 }
 
