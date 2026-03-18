@@ -614,12 +614,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: '#FF9800' }}>
-                <MessageSquare className="w-3.5 h-3.5" />
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: TEAL }}>
+                2
               </div>
               <div className="flex-1 space-y-2">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Instrucciones iniciales</p>
+                  <p className="text-[13px] font-black tracking-widest uppercase mb-1" style={{ color: TEAL }}>Instrucciones Iniciales</p>
                   <div className="rounded-xl px-3 py-2 bg-slate-50 border border-slate-100">
                     <p className="text-[12px] text-slate-500 leading-relaxed">{details?.initialComments || 'Sin instrucciones'}</p>
                   </div>
@@ -648,8 +648,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: rating > 0 ? GREEN : TEAL }}>
-                {rating > 0 ? '✓' : '2'}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: TEAL }}>
+                3
               </div>
               <div className="flex-1">
                 <p className="font-bold text-slate-800 text-[15px] mb-3">Califica el estado de la propiedad</p>
@@ -667,7 +667,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             <div className="h-px bg-slate-100" />
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: isInProgress ? GREEN : TEAL }}>
-                {isInProgress ? '✓' : '3'}
+                {isInProgress ? '✓' : '4'}
               </div>
               <div className="flex-1">
                 <p className="font-bold text-slate-800 text-[15px] mb-3">Inicia la limpieza</p>
