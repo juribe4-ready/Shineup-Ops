@@ -860,20 +860,27 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       )}
 
-      {/* MODAL INVENTORY DETAIL */}
+         {/* MODAL INVENTORY DETAIL */}
       {selectedInventory && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setSelectedInventory(null)}>
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-3">
-              <p className="font-black text-[15px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
-              <button onClick={() => setSelectedInventory(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            {selectedInventory.photoUrls && selectedInventory.photoUrls.length > 0 && (
+              <div className="w-full h-48 bg-slate-100">
+                <img src={selectedInventory.photoUrls[0]} alt="foto inventario" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-2">
+                <p className="font-black text-[16px] text-slate-800 flex-1 pr-4">{selectedInventory.comment || selectedInventory.status}</p>
+                <button onClick={() => setSelectedInventory(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center"><X className="w-3.5 h-3.5 text-slate-500" /></button>
+              </div>
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full inline-block ${selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'}`}>{selectedInventory.status}</span>
             </div>
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'}`}>{selectedInventory.status}</span>
           </div>
         </div>
       )}
 
-      {/* MODAL NUEVO INCIDENTE */}
+   {/* MODAL NUEVO INCIDENTE */}
       {showNewIncident && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowNewIncident(false)}>
           <div className="w-full max-w-sm bg-white rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
