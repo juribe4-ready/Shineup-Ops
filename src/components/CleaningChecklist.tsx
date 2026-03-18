@@ -157,10 +157,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [newIncName, setNewIncName]     = useState('')
   const [newIncComment, setNewIncComment] = useState('')
   const [newIncPhoto, setNewIncPhoto]   = useState<string | null>(null)
+  const [newIncPhotoFile, setNewIncPhotoFile] = useState<File | null>(null)
   const [savingIncident, setSavingIncident] = useState(false)
   const [newInvStatus, setNewInvStatus] = useState<'Low' | 'Out of Stock'>('Low')
   const [newInvComment, setNewInvComment] = useState('')
   const [newInvPhoto, setNewInvPhoto]   = useState<string | null>(null)
+  const [newInvPhotoFile, setNewInvPhotoFile] = useState<File | null>(null)
   const [savingInventory, setSavingInventory] = useState(false)
   const [closingPhotos, setClosingPhotos] = useState<{ url: string; filename: string }[]>([])
   const [finishing, setFinishing]           = useState(false)
@@ -330,6 +332,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleIncPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setNewIncPhotoFile(file)
     const reader = new FileReader()
     reader.onload = () => setNewIncPhoto(reader.result as string)
     reader.readAsDataURL(file)
@@ -338,6 +341,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleInvPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setNewInvPhotoFile(file)
     const reader = new FileReader()
     reader.onload = () => setNewInvPhoto(reader.result as string)
     reader.readAsDataURL(file)
@@ -346,15 +350,20 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleSaveIncident = async () => {
     if (!newIncName.trim()) { showToast('Escribe un nombre para el incidente', 'err'); return }
     setSavingIncident(true)
-    const optimistic: Incident = { id: `tmp-${Date.now()}`, name: newIncName, status: 'Reported', comment: newIncComment, photoUrls: [] }
+    const optimistic: Incident = { id: `tmp-${Date.now()}`, name: newIncName, status: 'Reported', comment: newIncComment, photoUrls: newIncPhoto ? [newIncPhoto] : [] }
     setIncidents(prev => [optimistic, ...prev])
     setShowNewIncident(false)
-    const name = newIncName; const comment = newIncComment
-    setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null)
+    const name = newIncName; const comment = newIncComment; const photoFile = newIncPhotoFile
+    setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null); setNewIncPhotoFile(null)
     try {
+      // Upload photo to Cloudinary first if exists
+      let photoUrl = ''
+      if (photoFile) {
+        photoUrl = await uploadToCloudinary(photoFile, () => {})
+      }
       await fetch('/api/createIncident', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
+        body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID, photoUrl })
       })
       showToast('Incidente registrado')
     } catch {
@@ -365,15 +374,19 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
   const handleSaveInventory = async () => {
     setSavingInventory(true)
-    const optimistic: InventoryRecord = { id: `tmp-${Date.now()}`, status: newInvStatus, comment: newInvComment, date: new Date().toISOString(), photoUrls: [] }
+    const optimistic: InventoryRecord = { id: `tmp-${Date.now()}`, status: newInvStatus, comment: newInvComment, date: new Date().toISOString(), photoUrls: newInvPhoto ? [newInvPhoto] : [] }
     setInventoryRecords(prev => [optimistic, ...prev])
     setShowNewInventory(false)
-    const status = newInvStatus; const comment = newInvComment
-    setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null)
+    const status = newInvStatus; const comment = newInvComment; const photoFile = newInvPhotoFile
+    setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null); setNewInvPhotoFile(null)
     try {
+      let photoUrl = ''
+      if (photoFile) {
+        photoUrl = await uploadToCloudinary(photoFile, () => {})
+      }
       await fetch('/api/addInventory', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID })
+        body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID, photoUrl })
       })
       showToast('Inventario registrado')
     } catch {
@@ -843,7 +856,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 {newIncPhoto ? (
                   <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
                     <img src={newIncPhoto} alt="foto" className="w-full h-full object-cover" />
-                    <button onClick={() => setNewIncPhoto(null)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
+                    <button onClick={() => { setNewIncPhoto(null); setNewIncPhotoFile(null) }} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
                   </div>
                 ) : (
                   <>
@@ -886,7 +899,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 {newInvPhoto ? (
                   <div className="relative w-full h-32 rounded-xl overflow-hidden border border-slate-200 mb-2">
                     <img src={newInvPhoto} alt="foto" className="w-full h-full object-cover" />
-                    <button onClick={() => setNewInvPhoto(null)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
+                    <button onClick={() => { setNewInvPhoto(null); setNewInvPhotoFile(null) }} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><X className="w-3 h-3 text-white" /></button>
                   </div>
                 ) : (
                   <>
