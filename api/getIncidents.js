@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     const data = await airtableRes.json();
     const allRecords = data.records || [];
 
-    
     console.log(`[getIncidents] Total: ${allRecords.length} | propertyId: ${propertyId}`);
 
     const filtered = allRecords.filter(r => {
@@ -38,14 +37,13 @@ export default async function handler(req, res) {
     const incidents = filtered.map(r => {
       const f = r.fields;
       const photos = f['Photos'] || [];
-      if (photos.length > 0) console.log('[DEBUG photos]', JSON.stringify(photos[0]));
       return {
         id: r.id,
         name: f['Name'] || 'Sin nombre',
         status: f['Status'] || 'Reported',
         creationDate: f['Creation Date'] || null,
         comment: f['Comment'] || '',
-        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || p?.thumbnails?.large?.url || '').filter(Boolean) : [],
+        photoUrls: Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
         reportedBy: f['Reported By'] || '',
       };
     });
