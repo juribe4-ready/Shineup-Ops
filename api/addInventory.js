@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const body = await parseBody(req);
-    const { status, comment, propertyId, cleaningId, staffId } = body;
+    const { status, comment, propertyId, cleaningId, staffId, photoUrl } = body;
 
     const fields = {
       'Status': status || 'Low',
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
     if (propertyId) fields['Property'] = [propertyId];
     if (cleaningId) fields['Cleanings'] = [cleaningId];
     if (staffId) fields['Reported By'] = [staffId];
+    if (photoUrl) fields['Attachments'] = [{ url: photoUrl }];
 
     const airtableRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/ClientInventory`, {
       method: 'POST',
