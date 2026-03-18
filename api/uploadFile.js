@@ -1,12 +1,9 @@
-// api/uploadFile.js
-// Genera una URL pre-firmada de Backblaze B2 para upload directo desde el browser
+import crypto from 'crypto';
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME;
 const ENDPOINT = process.env.B2_ENDPOINT;
 const KEY_ID = process.env.B2_KEY_ID;
 const APP_KEY = process.env.B2_APP_KEY;
-const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
-const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
 async function parseBody(req) {
   return new Promise((resolve) => {
@@ -21,9 +18,7 @@ async function parseBody(req) {
   });
 }
 
-// Genera signature para S3 compatible API
 function hmacSha256(key, message) {
-  const crypto = require('crypto');
   return crypto.createHmac('sha256', key).update(message).digest();
 }
 
@@ -31,8 +26,7 @@ function getSignatureKey(key, dateStamp, regionName, serviceName) {
   const kDate = hmacSha256('AWS4' + key, dateStamp);
   const kRegion = hmacSha256(kDate, regionName);
   const kService = hmacSha256(kRegion, serviceName);
-  const kSigning = hmacSha256(kService, 'aws4_request');
-  return kSigning;
+  return hmacSha256(kService, 'aws4_request');
 }
 
 export default async function handler(req, res) {
@@ -50,20 +44,18 @@ export default async function handler(req, res) {
 
     console.log(`[uploadFile] cleaningId: ${cleaningId} | type: ${type} | filename: ${filename}`);
 
-    // Generar nombre unico para el archivo
     const timestamp = Date.now();
     const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${type}/${cleaningId}/${timestamp}_${safeName}`;
 
-    // Generar presigned URL usando AWS SDK compatible con B2
-    const crypto = require('crypto');
-    const region = ENDPOINT.split('.')[1]; // us-east-005
+    // Extraer region del endpoint: s3.us-east-005.backblazeb2.com -> us-east-005
+    const region = ENDPOINT.replace('s3.', '').replace('.backblazeb2.com', '');
+
     const now = new Date();
     const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const amzDateTime = now.toISOString().replace(/[:-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+    const amzDateTime = now.toISOString().replace(/[:-]/g, '').replace(/\.\d{3}/, '');
 
-    const expiresIn = 3600; // 1 hora
-
+    const expiresIn = 3600;
     const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
     const credential = `${KEY_ID}/${credentialScope}`;
 
@@ -108,14 +100,7 @@ export default async function handler(req, res) {
 
     console.log(`[uploadFile] Presigned URL generada para: ${key}`);
 
-    // Devolver la presigned URL al frontend
-    return res.status(200).json({
-      presignedUrl,
-      publicUrl,
-      key,
-      cleaningId,
-      type,
-    });
+    return res.status(200).json({ presignedUrl, publicUrl, key });
 
   } catch (err) {
     console.error('[uploadFile] Error:', err);
