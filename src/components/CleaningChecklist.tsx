@@ -42,47 +42,55 @@ const formatTime = (v?: string | null) => {
   catch { return '--:--' }
 }
 
-// Upload directo a Backblaze B2 con progreso
-const uploadToB2 = async (
+const CLOUDINARY_CLOUD = 'dw93dwwrh'
+const CLOUDINARY_PRESET = 'shineup-ops'
+
+// Comprime video antes de subir usando canvas (para videos cortos)
+// Para videos largos simplemente los sube directamente
+const uploadToCloudinary = async (
   file: File,
-  cleaningId: string,
-  type: string,
   onProgress: (pct: number) => void
 ): Promise<string> => {
-  // 1. Obtener presigned URL de nuestro backend
-  const res = await fetch('/api/uploadFile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cleaningId, type, filename: file.name, contentType: file.type })
-  })
-  if (!res.ok) throw new Error('Error obteniendo URL de upload')
-  const { presignedUrl, publicUrl } = await res.json()
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('upload_preset', CLOUDINARY_PRESET)
+  formData.append('folder', 'shineup-ops')
 
-  // 2. Upload directo a B2 con XMLHttpRequest para tener progreso
-  await new Promise<void>((resolve, reject) => {
+  // Si es video, limitar calidad
+  if (file.type.startsWith('video/')) {
+    formData.append('resource_type', 'video')
+    formData.append('transformation', JSON.stringify([
+      { quality: 'auto:low', width: 1280, crop: 'limit' }
+    ]))
+  }
+
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
     }
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new Error(`Upload failed: ${xhr.status}`))
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const data = JSON.parse(xhr.responseText)
+        resolve(data.secure_url)
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`))
+      }
     }
     xhr.onerror = () => reject(new Error('Upload error'))
-    xhr.open('PUT', presignedUrl)
-    xhr.setRequestHeader('Content-Type', file.type)
-    xhr.send(file)
+    const resourceType = file.type.startsWith('video/') ? 'video' : 'image'
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`)
+    xhr.send(formData)
   })
+}
 
-  // 3. Guardar URL en Airtable
-  const saveRes = await fetch('/api/saveFileUrl', {
+const saveUrlToAirtable = async (cleaningId: string, type: string, publicUrl: string, filename: string) => {
+  const res = await fetch('/api/saveFileUrl', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cleaningId, type, publicUrl, filename: file.name })
+    body: JSON.stringify({ cleaningId, type, publicUrl, filename })
   })
-  if (!saveRes.ok) throw new Error('Error guardando en Airtable')
-
-  return publicUrl
+  if (!res.ok) throw new Error('Error guardando en Airtable')
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -252,11 +260,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const files = e.target.files
     if (!files?.length) return
     setUploadingVideo(true)
+    setVideoProgress(0)
     try {
       for (const file of Array.from(files)) {
-        const url = await uploadToB2(file, cleaning.id, 'video', (pct) => {
-          console.log(`Video upload: ${pct}%`)
-        })
+        const url = await uploadToCloudinary(file, (pct) => setVideoProgress(pct))
+        await saveUrlToAirtable(cleaning.id, 'video', url, file.name)
         setVideoThumbs(prev => [...prev, url])
       }
       showToast('Video subido correctamente')
@@ -265,6 +273,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       showToast('Error al subir video', 'err')
     } finally {
       setUploadingVideo(false)
+      setVideoProgress(0)
       if (videoInputRef.current) videoInputRef.current.value = ''
     }
   }
@@ -273,11 +282,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const files = e.target.files
     if (!files?.length) return
     setUploadingClosing(true)
+    setClosingProgress(0)
     try {
       for (const file of Array.from(files)) {
-        const url = await uploadToB2(file, cleaning.id, 'closing', (pct) => {
-          console.log(`Closing upload: ${pct}%`)
-        })
+        const url = await uploadToCloudinary(file, (pct) => setClosingProgress(pct))
+        await saveUrlToAirtable(cleaning.id, 'closing', url, file.name)
         setClosingPhotos(prev => [...prev, { url, filename: file.name }])
       }
       showToast('Archivo subido correctamente')
@@ -286,6 +295,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       showToast('Error al subir archivo', 'err')
     } finally {
       setUploadingClosing(false)
+      setClosingProgress(0)
       if (closingInputRef.current) closingInputRef.current.value = ''
     }
   }
@@ -573,10 +583,20 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   </div>
                 )}
                 <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
-                <button onClick={() => videoInputRef.current?.click()} disabled={uploadingVideo}
+                {uploadingVideo && (
+                  <div className="mb-3">
+                    <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                      <span>Subiendo...</span><span>{videoProgress}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-300" style={{ width: `${videoProgress}%`, background: TEAL }} />
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => !uploadingVideo && videoInputRef.current?.click()} disabled={uploadingVideo}
                   className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent' }}>
-                  <Camera className="w-4 h-4" /> {uploadingVideo ? 'Subiendo...' : 'Seleccionar video / foto'}
+                  style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent', opacity: uploadingVideo ? 0.6 : 1 }}>
+                  <Camera className="w-4 h-4" /> {uploadingVideo ? `Subiendo ${videoProgress}%...` : 'Seleccionar video / foto'}
                 </button>
               </div>
             </div>
@@ -737,12 +757,22 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </div>
             )}
             <input ref={closingInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleClosingUpload} />
-            <button onClick={() => isInProgress && !isDone && closingInputRef.current?.click()}
+            {uploadingClosing && (
+              <div className="mb-2">
+                <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                  <span>Subiendo...</span><span>{closingProgress}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${closingProgress}%`, background: TEAL }} />
+                </div>
+              </div>
+            )}
+            <button onClick={() => isInProgress && !isDone && !uploadingClosing && closingInputRef.current?.click()}
               disabled={!isInProgress || uploadingClosing || isDone}
               className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-              style={{ borderColor: isInProgress ? '#94A3B8' : '#CBD5E1', color: isInProgress ? '#64748B' : '#CBD5E1' }}>
+              style={{ borderColor: isInProgress ? '#94A3B8' : '#CBD5E1', color: isInProgress ? '#64748B' : '#CBD5E1', opacity: uploadingClosing ? 0.6 : 1 }}>
               <Camera className="w-4 h-4" />
-              {uploadingClosing ? 'Subiendo...' : details?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos' : details?.closingMediaType?.toLowerCase().includes('video') ? 'Subir Videos' : 'Subir fotos / videos'}
+              {uploadingClosing ? `Subiendo ${closingProgress}%...` : details?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos' : details?.closingMediaType?.toLowerCase().includes('video') ? 'Subir Videos' : 'Subir fotos / videos'}
             </button>
             <button onClick={handleFinish} disabled={!isInProgress || finishing || isDone}
               className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
