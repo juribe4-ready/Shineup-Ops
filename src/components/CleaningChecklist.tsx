@@ -42,16 +42,48 @@ const formatTime = (v?: string | null) => {
   catch { return '--:--' }
 }
 
-const fileToBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1]) // solo base64 sin el prefix
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
+// Upload directo a Backblaze B2 con progreso
+const uploadToB2 = async (
+  file: File,
+  cleaningId: string,
+  type: string,
+  onProgress: (pct: number) => void
+): Promise<string> => {
+  // 1. Obtener presigned URL de nuestro backend
+  const res = await fetch('/api/uploadFile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cleaningId, type, filename: file.name, contentType: file.type })
   })
+  if (!res.ok) throw new Error('Error obteniendo URL de upload')
+  const { presignedUrl, publicUrl } = await res.json()
+
+  // 2. Upload directo a B2 con XMLHttpRequest para tener progreso
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`Upload failed: ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Upload error'))
+    xhr.open('PUT', presignedUrl)
+    xhr.setRequestHeader('Content-Type', file.type)
+    xhr.send(file)
+  })
+
+  // 3. Guardar URL en Airtable
+  const saveRes = await fetch('/api/saveFileUrl', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cleaningId, type, publicUrl, filename: file.name })
+  })
+  if (!saveRes.ok) throw new Error('Error guardando en Airtable')
+
+  return publicUrl
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -115,6 +147,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [isDone, setIsDone]                 = useState(false)
   const [startingCleaning, setStartingCleaning] = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [videoProgress, setVideoProgress] = useState(0)
+  const [closingProgress, setClosingProgress] = useState(0)
   const [uploadingClosing, setUploadingClosing] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   const [incidents, setIncidents]           = useState<Incident[]>([])
@@ -220,25 +254,16 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setUploadingVideo(true)
     try {
       for (const file of Array.from(files)) {
-        const base64 = await fileToBase64(file)
-        const res = await fetch('/api/uploadFile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cleaningId: cleaning.id,
-            type: 'video',
-            filename: file.name,
-            base64,
-            contentType: file.type,
-          })
+        const url = await uploadToB2(file, cleaning.id, 'video', (pct) => {
+          console.log(`Video upload: ${pct}%`)
         })
-        if (!res.ok) throw new Error('Error al subir')
-        const data = await res.json()
-        if (data.url) setVideoThumbs(prev => [...prev, data.url])
+        setVideoThumbs(prev => [...prev, url])
       }
-      showToast('Archivo(s) subido(s)')
-    } catch { showToast('Error al subir', 'err') }
-    finally {
+      showToast('Video subido correctamente')
+    } catch (err: any) {
+      console.error(err)
+      showToast('Error al subir video', 'err')
+    } finally {
       setUploadingVideo(false)
       if (videoInputRef.current) videoInputRef.current.value = ''
     }
@@ -250,25 +275,16 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setUploadingClosing(true)
     try {
       for (const file of Array.from(files)) {
-        const base64 = await fileToBase64(file)
-        const res = await fetch('/api/uploadFile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cleaningId: cleaning.id,
-            type: 'closing',
-            filename: file.name,
-            base64,
-            contentType: file.type,
-          })
+        const url = await uploadToB2(file, cleaning.id, 'closing', (pct) => {
+          console.log(`Closing upload: ${pct}%`)
         })
-        if (!res.ok) throw new Error('Error al subir')
-        const data = await res.json()
-        if (data.url) setClosingPhotos(prev => [...prev, { url: data.url, filename: file.name }])
+        setClosingPhotos(prev => [...prev, { url, filename: file.name }])
       }
-      showToast('Archivo(s) subido(s)')
-    } catch { showToast('Error al subir', 'err') }
-    finally {
+      showToast('Archivo subido correctamente')
+    } catch (err: any) {
+      console.error(err)
+      showToast('Error al subir archivo', 'err')
+    } finally {
       setUploadingClosing(false)
       if (closingInputRef.current) closingInputRef.current.value = ''
     }
