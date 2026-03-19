@@ -60,8 +60,15 @@ const fmt = (v?: string | null) => {
   catch { return '--:--' }
 }
 
-const isVideoFile = (file: File) =>
-  file.type.startsWith('video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(file.name)
+const isVideoFile = (file: File) => {
+  if (!file) return false
+  const type = file.type || ''
+  const name = file.name || ''
+  return type.startsWith('video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(name)
+}
+
+const isVideoUrl = (url: string) =>
+  url?.includes('/video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(url || '')
 
 const uploadToCloudinary = (file: File, onProgress: (pct: number) => void): Promise<string> => {
   const formData = new FormData()
@@ -569,7 +576,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   {videoThumbs.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {videoThumbs.map((url, i) => {
-                        const isVid = url.includes('/video/') || isVideoFile({ name: url } as File)
+                        const isVid = isVideoUrl(url)
                         return (
                           <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
                             style={{ border: `2px solid ${C.teal}`, background: isVid ? C.ink : C.bg }}>
@@ -790,7 +797,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             {closingPhotos.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {closingPhotos.map((photo, i) => {
-                  const isVid = photo.url.includes('/video/') || /\.(mp4|mov|avi|webm)$/i.test(photo.filename || '')
+                  const isVid = isVideoUrl(photo.url) || isVideoUrl(photo.filename || '')
                   return (
                     <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
                       style={{ border: `2px solid ${C.teal}`, background: isVid ? C.ink : C.bg }}>
