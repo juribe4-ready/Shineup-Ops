@@ -4,7 +4,14 @@ import { createClient, Session, User } from '@supabase/supabase-js'
 const SUPABASE_URL = 'https://jpdajjiaukzilrxwcgtx.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_lVelTDSvaDDwvSGRLINQ8A_9eSKcZVP'
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'implicit',
+  }
+})
 
 interface Profile {
   id: string
