@@ -1,8 +1,6 @@
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 
-console.log('TOKEN:', AIRTABLE_TOKEN ? 'existe' : 'UNDEFINED');
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -40,6 +38,20 @@ export default async function handler(req, res) {
 
     console.log(`[getCleanings] Total: ${allRecords.length}`);
 
+    // Fetch staff initials map
+    const staffMap = {};
+    try {
+      const staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials`, {
+        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
+      });
+      if (staffRes.ok) {
+        const staffData = await staffRes.json();
+        for (const s of (staffData.records || [])) {
+          staffMap[s.id] = s.fields?.Initials || s.fields?.Name?.substring(0, 2).toUpperCase() || '??';
+        }
+      }
+    } catch {}
+
     const filtered = allRecords.filter(r => {
       const f = r.fields;
       const d = f['Date'];
@@ -60,8 +72,8 @@ export default async function handler(req, res) {
       const addressRaw = f['Address'];
       const address = Array.isArray(addressRaw) ? addressRaw[0] : (addressRaw || 'Direccion no disponible');
       const staffListRaw = f['staffList'] || '';
-      const staffList = typeof staffListRaw === 'string'
-        ? staffListRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const assignedStaffIds = Array.isArray(f['Assigned Staff']) ? f['Assigned Staff'] : [];
+      const staffList = assignedStaffIds.map(id => staffMap[id] || '??').filter(Boolean);
       const equipment = f['Equipment'] || [];
       const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
       const rawDate = f['Date'];
