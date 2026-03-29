@@ -86,8 +86,9 @@ export default function App() {
     const done       = cleanings.filter(c => c.status === 'Done').length
     const inProgress = cleanings.filter(c => c.status === 'In Progress').length
     const programmed = cleanings.filter(c => c.status === 'Programmed' || c.status === 'Scheduled').length
+    const opened     = cleanings.filter(c => c.status === 'Opened').length
     const percent    = total > 0 ? Math.round((done / total) * 100) : 0
-    return { total, done, inProgress, programmed, percent }
+    return { total, done, inProgress, programmed, opened, percent }
   }, [cleanings])
 
   const greeting = () => {
@@ -177,10 +178,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-1.5 mb-4">
+          <div className="grid grid-cols-5 gap-1 mb-4">
             {[
               { label: 'Total',        value: stats.total,      color: '#E0F7FA' },
               { label: 'No iniciadas', value: stats.programmed, color: '#FFCCBC' },
+              { label: 'Abiertas',     value: stats.opened,     color: '#FFF176' },
               { label: 'Progreso',     value: stats.inProgress, color: '#B2EBF2' },
               { label: 'Terminadas',   value: stats.done,       color: '#FFD700' },
             ].map(({ label, value, color }) => (
