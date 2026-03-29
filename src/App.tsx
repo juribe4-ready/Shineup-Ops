@@ -181,14 +181,14 @@ export default function App() {
           <div className="grid grid-cols-5 gap-1 mb-4">
             {[
               { label: 'Total',        value: stats.total,      color: '#E0F7FA' },
-              { label: 'No iniciadas', value: stats.programmed, color: '#FFCCBC' },
+              { label: 'Sin iniciar', value: stats.programmed, color: '#FFCCBC' },
               { label: 'Abiertas',     value: stats.opened,     color: '#FFF176' },
               { label: 'Progreso',     value: stats.inProgress, color: '#B2EBF2' },
               { label: 'Terminadas',   value: stats.done,       color: '#FFD700' },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-xl px-2 py-2 flex flex-col items-center" style={{ background: 'rgba(255,255,255,0.13)', backdropFilter: 'blur(6px)' }}>
                 <span className="text-lg font-[950] leading-none" style={{ color }}>{value}</span>
-                <span className="text-[8px] font-semibold mt-0.5 uppercase tracking-wide text-center" style={{ color: 'rgba(255,255,255,0.90)' }}>{label}</span>
+                <span className="text-[7px] font-semibold mt-0.5 uppercase tracking-wide text-center leading-tight whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.90)' }}>{label}</span>
               </div>
             ))}
           </div>
