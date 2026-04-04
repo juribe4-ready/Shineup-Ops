@@ -20,6 +20,22 @@ export default async function handler(req, res) {
     const data = await airtableRes.json();
     const allRecords = data.records || [];
 
+  // Build staff name map
+  const staffMap = {}
+  try {
+    const staffRes = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Name&fields[]=Initials`,
+      { headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` } }
+    )
+    if (staffRes.ok) {
+      const staffData = await staffRes.json()
+      for (const s of (staffData.records || [])) {
+        staffMap[s.id] = s.fields?.Name || s.fields?.Initials || 'Unknown'
+      }
+    }
+  } catch {}
+
+
     console.log(`[getIncidents] Total: ${allRecords.length} | propertyId: ${propertyId}`);
 
     const filtered = allRecords.filter(r => {
@@ -44,7 +60,7 @@ export default async function handler(req, res) {
         creationDate: f['Creation Date'] || null,
         comment: f['Comment'] || '',
         photoUrls: f['MediaURL'] ? [f['MediaURL']] : Array.isArray(photos) ? photos.map(p => p?.url || '').filter(Boolean) : [],
-        reportedBy: f['Reported By'] || '',
+        reportedBy: Array.isArray(f['Reported By']) ? (staffMap[f['Reported By'][0]] || '') : (f['Reported By'] || ''),
       };
     });
 
