@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     if (!getRes.ok) throw new Error('Error obteniendo registro de Airtable');
     const record = await getRes.json();
 
-    const fieldName = type === 'video' ? 'VideoInicial' : 'Photos & Videos'
+    const fieldName = type === 'video' ? 'VideoInicial' : type === 'storage' ? 'StoragePhoto' : 'Photos & Videos'
     const existing = record.fields[fieldName] || [];
 
     // Acumular — no reemplazar
