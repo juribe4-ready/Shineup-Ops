@@ -102,6 +102,12 @@ export default async function handler(req, res) {
     const photosVideos = Array.isArray(photosVideosRaw)
       ? photosVideosRaw.filter(p => p?.url).map(p => ({ url: p.url, filename: p.filename || 'archivo' })) : [];
 
+    // StoragePhoto - Attachment field, get first URL
+    const storagePhotoRaw = f['StoragePhoto'] || [];
+    const storagePhoto = Array.isArray(storagePhotoRaw) && storagePhotoRaw[0]
+      ? (storagePhotoRaw[0].thumbnails?.large?.url || storagePhotoRaw[0].url || null)
+      : null;
+
     const tasks = taskRecords.map(t => ({
       id: t.id,
       taskName: t.fields?.['Task Name'] || t.fields?.taskName || '',
@@ -126,7 +132,7 @@ export default async function handler(req, res) {
         assignedStaffNames, initialComments, doorCodes,
         estimatedEndTime,
         openComments: f['OpenComments'] || f['Open Comments'] || '',
-        rating, videoInicial, photosVideos, equipment,
+        rating, videoInicial, photosVideos, storagePhoto, equipment,
       },
       tasks,
     });
