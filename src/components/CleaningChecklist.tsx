@@ -802,7 +802,9 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                       <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: rec.status === 'Out of Stock' ? C.red : C.amber }} />
                       <div className="flex-1 min-w-0">
                         <span className="block text-[13px] font-semibold truncate" style={{ color: C.ink }}>{rec.comment || rec.status}</span>
-                        {fmtDateTime(rec.date) && <span className="text-[10px] font-medium" style={{ color: C.muted }}>{fmtDateTime(rec.date)}</span>}
+                        <span className="text-[10px] font-medium" style={{ color: C.muted }}>
+                          {[fmtDateTime(rec.date), rec.reportedBy].filter(Boolean).join(' · ')}
+                        </span>
                       </div>
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 mt-0.5"
                         style={{ background: rec.status === 'Out of Stock' ? '#FEE2E2' : '#FEF3C7', color: rec.status === 'Out of Stock' ? C.red : C.amber }}>
@@ -843,7 +845,9 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                       <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: inc.status !== 'Closed' ? C.amber : C.muted }} />
                       <div className="flex-1 min-w-0">
                         <span className="block text-[13px] font-semibold truncate" style={{ color: C.ink }}>{inc.name}</span>
-                        {fmtDateTime(inc.creationDate) && <span className="text-[10px] font-medium" style={{ color: C.muted }}>{fmtDateTime(inc.creationDate)}</span>}
+                        <span className="text-[10px] font-medium" style={{ color: C.muted }}>
+                          {[fmtDateTime(inc.creationDate), inc.reportedBy].filter(Boolean).join(' · ')}
+                        </span>
                       </div>
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 mt-0.5"
                         style={{
@@ -978,8 +982,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 {selectedIncident.status}
               </span>
               {selectedIncident.comment && <p className="text-[13px] font-medium leading-relaxed mb-2" style={{ color: C.slate }}>{selectedIncident.comment}</p>}
-              {fmtDateTime(selectedIncident.creationDate) && (
-                <p className="text-[11px] font-medium mt-1" style={{ color: C.muted }}>📅 {fmtDateTime(selectedIncident.creationDate)}</p>
+              {(fmtDateTime(selectedIncident.creationDate) || selectedIncident.reportedBy) && (
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                  {fmtDateTime(selectedIncident.creationDate) && <p className="text-[11px] font-medium" style={{ color: C.muted }}>📅 {fmtDateTime(selectedIncident.creationDate)}</p>}
+                  {selectedIncident.reportedBy && <p className="text-[11px] font-medium" style={{ color: C.muted }}>👤 {selectedIncident.reportedBy}</p>}
+                </div>
               )}
             </div>
           </div>
