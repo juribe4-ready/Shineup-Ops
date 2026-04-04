@@ -60,6 +60,15 @@ const fmt = (v?: string | null) => {
   catch { return '--:--' }
 }
 
+const fmtDateTime = (v?: string | null) => {
+  if (!v) return null
+  try {
+    const d = new Date(v)
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' +
+      d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  } catch { return null }
+}
+
 const isVideoFile = (file: File) => {
   if (!file) return false
   const type = file.type || ''
@@ -215,6 +224,9 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [newInvPhotoFile, setNewInvPhotoFile] = useState<File | null>(null)
   const [savingInventory, setSavingInventory] = useState(false)
   const [closingPhotos, setClosingPhotos] = useState<{ url: string; filename: string }[]>([])
+  const [storagePhoto, setStoragePhoto]   = useState<string | null>(null)
+  const [uploadingStorage, setUploadingStorage] = useState(false)
+  const [storageProgress, setStorageProgress]   = useState(0)
   const [finishing, setFinishing]           = useState(false)
   const [toast, setToast]                   = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
@@ -223,7 +235,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const reporteRef = useRef<HTMLDivElement>(null)
   const cierreRef  = useRef<HTMLDivElement>(null)
   const videoInputRef   = useRef<HTMLInputElement>(null)
-  const closingInputRef = useRef<HTMLInputElement>(null)
+  const closingInputRef  = useRef<HTMLInputElement>(null)
+  const storageInputRef  = useRef<HTMLInputElement>(null)
   const incPhotoRef     = useRef<HTMLInputElement>(null)
   const invPhotoRef     = useRef<HTMLInputElement>(null)
 
@@ -258,6 +271,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       if (d.videoInicial?.length) { setVideoThumbs(d.videoInicial); setOpenCommentsSaved(true) }
       setOpenComments(d.openComments || '')
       if (d.photosVideos?.length) setClosingPhotos(d.photosVideos)
+      if (d.storagePhoto) setStoragePhoto(d.storagePhoto)
       if (d.propertyId) { loadIncidents(d.propertyId); loadInventory(d.propertyId) }
     } catch { showToast('Error al cargar', 'err') }
     finally { setLoading(false) }
@@ -291,6 +305,18 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       showToast('Video subido ✓')
     } catch { showToast('Error al subir', 'err') }
     finally { setUploadingVideo(false); setVideoProgress(0); if (videoInputRef.current) videoInputRef.current.value = '' }
+  }
+
+  const handleStorageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUploadingStorage(true); setStorageProgress(0)
+    try {
+      const url = await uploadToCloudinary(file, pct => setStorageProgress(pct))
+      await saveUrlToAirtable(cleaning.id, 'storage', url, file.name)
+      setStoragePhoto(url)
+      showToast('Foto del almacén guardada ✓')
+    } catch { showToast('Error al subir', 'err') }
+    finally { setUploadingStorage(false); setStorageProgress(0); if (storageInputRef.current) storageInputRef.current.value = '' }
   }
 
   const handleClosingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -707,11 +733,54 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         <div ref={reporteRef}>
           <SectionLabel>Reporte</SectionLabel>
 
-          {/* Inventario */}
+          {/* Foto del Almacén */}
+          <div className="rounded-3xl overflow-hidden shadow-sm mb-4 p-5" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="font-black text-[14px]" style={{ color: C.ink }}>Foto del Almacén</p>
+                <p className="text-[11px] font-medium" style={{ color: C.muted }}>Registra el estado del almacén</p>
+              </div>
+            </div>
+            {storagePhoto ? (
+              <div className="relative rounded-2xl overflow-hidden" style={{ height: '140px' }}>
+                <img src={storagePhoto} alt="almacén" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-end p-2 justify-end" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.3), transparent)' }}>
+                  <button onClick={() => isInProgress && storageInputRef.current?.click()}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-xl text-white"
+                    style={{ background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)' }}>
+                    Cambiar foto
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {uploadingStorage && (
+                  <div className="mb-3 p-3 rounded-2xl" style={{ background: C.tealLight }}>
+                    <div className="flex justify-between text-[11px] font-bold mb-1.5" style={{ color: C.tealDark }}>
+                      <span>Subiendo...</span><span>{storageProgress}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.tealMid }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${storageProgress}%`, background: C.teal }} />
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => isInProgress && !uploadingStorage && storageInputRef.current?.click()}
+                  disabled={!isInProgress || uploadingStorage}
+                  className="w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
+                  style={{ borderColor: isInProgress ? C.teal : C.border, color: isInProgress ? C.teal : C.muted }}>
+                  <Camera className="w-4 h-4" />
+                  {uploadingStorage ? `Subiendo ${storageProgress}%...` : 'Subir foto del almacén'}
+                </button>
+              </>
+            )}
+            <input ref={storageInputRef} type="file" accept="image/*" className="hidden" onChange={handleStorageUpload} />
+          </div>
+
+          {/* Rupturas de inventario */}
           <div className="rounded-3xl overflow-hidden shadow-sm mb-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
               <div>
-                <p className="font-black text-[14px]" style={{ color: C.ink }}>Inventario del Cliente</p>
+                <p className="font-black text-[14px]" style={{ color: C.ink }}>Rupturas de inventario</p>
                 <p className="text-[11px] font-medium" style={{ color: C.muted }}>Artículos bajos o agotados</p>
               </div>
               <button onClick={() => isInProgress && setShowNewInventory(true)} disabled={!isInProgress}
@@ -729,14 +798,17 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               ) : (
                 <div className="divide-y" style={{ borderColor: C.border }}>
                   {inventoryRecords.map(rec => (
-                    <button key={rec.id} onClick={() => setSelectedInventory(rec)} className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-slate-50 transition-colors">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: rec.status === 'Out of Stock' ? C.red : C.amber }} />
-                      <span className="flex-1 text-[13px] font-semibold truncate" style={{ color: C.ink }}>{rec.comment || rec.status}</span>
-                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0"
+                    <button key={rec.id} onClick={() => setSelectedInventory(rec)} className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-slate-50 transition-colors">
+                      <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: rec.status === 'Out of Stock' ? C.red : C.amber }} />
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-[13px] font-semibold truncate" style={{ color: C.ink }}>{rec.comment || rec.status}</span>
+                        {fmtDateTime(rec.date) && <span className="text-[10px] font-medium" style={{ color: C.muted }}>{fmtDateTime(rec.date)}</span>}
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 mt-0.5"
                         style={{ background: rec.status === 'Out of Stock' ? '#FEE2E2' : '#FEF3C7', color: rec.status === 'Out of Stock' ? C.red : C.amber }}>
                         {rec.status}
                       </span>
-                      <ChevronRight className="w-4 h-4 shrink-0" style={{ color: C.muted }} />
+                      <ChevronRight className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.muted }} />
                     </button>
                   ))}
                 </div>
@@ -767,17 +839,20 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               ) : (
                 <div className="divide-y" style={{ borderColor: C.border }}>
                   {incidents.map(inc => (
-                    <button key={inc.id} onClick={() => setSelectedIncident(inc)} className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-slate-50 transition-colors">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: inc.status !== 'Closed' ? C.amber : C.muted }} />
-                      <span className="flex-1 text-[13px] font-semibold truncate" style={{ color: C.ink }}>{inc.name}</span>
-                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0"
+                    <button key={inc.id} onClick={() => setSelectedIncident(inc)} className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-slate-50 transition-colors">
+                      <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: inc.status !== 'Closed' ? C.amber : C.muted }} />
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-[13px] font-semibold truncate" style={{ color: C.ink }}>{inc.name}</span>
+                        {fmtDateTime(inc.creationDate) && <span className="text-[10px] font-medium" style={{ color: C.muted }}>{fmtDateTime(inc.creationDate)}</span>}
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 mt-0.5"
                         style={{
                           background: inc.status === 'Reported' ? '#FEF3C7' : inc.status === 'In Progress' ? '#DBEAFE' : '#DCFCE7',
                           color: inc.status === 'Reported' ? C.amber : inc.status === 'In Progress' ? '#2563EB' : C.green
                         }}>
                         {inc.status}
                       </span>
-                      <ChevronRight className="w-4 h-4 shrink-0" style={{ color: C.muted }} />
+                      <ChevronRight className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.muted }} />
                     </button>
                   ))}
                 </div>
@@ -902,7 +977,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 style={{ background: selectedIncident.status === 'Reported' ? '#FEF3C7' : '#DCFCE7', color: selectedIncident.status === 'Reported' ? C.amber : C.green }}>
                 {selectedIncident.status}
               </span>
-              {selectedIncident.comment && <p className="text-[13px] font-medium leading-relaxed" style={{ color: C.slate }}>{selectedIncident.comment}</p>}
+              {selectedIncident.comment && <p className="text-[13px] font-medium leading-relaxed mb-2" style={{ color: C.slate }}>{selectedIncident.comment}</p>}
+              {fmtDateTime(selectedIncident.creationDate) && (
+                <p className="text-[11px] font-medium mt-1" style={{ color: C.muted }}>📅 {fmtDateTime(selectedIncident.creationDate)}</p>
+              )}
             </div>
           </div>
         </div>
