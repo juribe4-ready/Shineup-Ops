@@ -187,26 +187,9 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 mb-4">
-            <button onClick={() => navigateDate(-1)}
-              className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
-              style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <ChevronLeft className="w-4 h-4 text-white" strokeWidth={2.5} />
-            </button>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[11px] font-semibold" style={{ background: 'rgba(0,0,0,0.15)' }}>
               <CalendarIcon className="w-3 h-3 opacity-70" />{todayLabel}
             </div>
-            <button onClick={() => navigateDate(1)}
-              className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
-              style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <ChevronRight className="w-4 h-4 text-white" strokeWidth={2.5} />
-            </button>
-            {!isToday && (
-              <button onClick={goToday}
-                className="px-2.5 py-1 rounded-full text-[10px] font-bold active:scale-90 transition-all"
-                style={{ background: 'rgba(255,255,255,0.25)', color: 'white' }}>
-                Hoy
-              </button>
-            )}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[11px] font-bold" style={{ background: 'rgba(0,0,0,0.20)', fontFamily: 'monospace' }}>
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75" />
@@ -249,9 +232,29 @@ export default function App() {
               {filteredCleanings.length} {filteredCleanings.length === 1 ? 'limpieza' : 'limpiezas'} asignadas
             </p>
           </div>
-          <button onClick={() => loadCleanings()} className="text-xs font-semibold h-8 px-3 bg-white shadow-sm border border-slate-100 rounded-xl" style={{ color: TEAL }}>
-            Actualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigateDate(-1)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-sm border border-slate-100 active:scale-90 transition-all">
+              <ChevronLeft className="w-4 h-4" style={{ color: TEAL }} />
+            </button>
+            <span className="text-[12px] font-bold text-slate-600">
+              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+            </span>
+            <button onClick={() => navigateDate(1)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-sm border border-slate-100 active:scale-90 transition-all">
+              <ChevronRight className="w-4 h-4" style={{ color: TEAL }} />
+            </button>
+            {!isToday && (
+              <button onClick={goToday}
+                className="h-8 px-3 rounded-xl text-[11px] font-bold bg-white shadow-sm border border-slate-100"
+                style={{ color: TEAL }}>
+                Hoy
+              </button>
+            )}
+            <button onClick={() => loadCleanings()} className="text-xs font-semibold h-8 px-3 bg-white shadow-sm border border-slate-100 rounded-xl" style={{ color: TEAL }}>
+              Actualizar
+            </button>
+          </div>
         </div>
 
         {loadingData ? (
