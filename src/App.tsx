@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Calendar as CalendarIcon, Search, LogOut } from 'lucide-react'
+import { Calendar as CalendarIcon, Search, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
 import CleaningCard from './components/CleaningCard'
 import CleaningChecklist from './components/CleaningChecklist'
 import LoginPage from './LoginPage'
@@ -32,6 +32,9 @@ export default function App() {
   const [error, setError]                   = useState<string | null>(null)
   const [searchQuery, setSearchQuery]       = useState('')
   const [selectedCleaning, setSelectedCleaning] = useState<any | null>(null)
+  const [selectedDate, setSelectedDate]       = useState(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  )
   const [currentTime, setCurrentTime]       = useState(
     new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
   )
@@ -44,7 +47,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (profile?.staff_airtable_id) loadCleanings()
+    if (profile?.staff_airtable_id) loadCleanings(selectedDate)
     else if (profile && !profile.staff_airtable_id) setLoadingData(false)
   }, [profile])
 
@@ -58,12 +61,12 @@ export default function App() {
     }
   }, [profile])
 
-  const loadCleanings = async () => {
+  const loadCleanings = async (date?: string) => {
     setLoadingData(true)
     setError(null)
+    const dateToLoad = date || selectedDate
     try {
-      const columbusDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      const res = await fetch(`/api/getCleanings?staffId=${profile!.staff_airtable_id}&date=${columbusDate}`)
+      const res = await fetch(`/api/getCleanings?staffId=${profile!.staff_airtable_id}&date=${dateToLoad}`)
       if (!res.ok) throw new Error('Error al cargar limpiezas')
       setCleanings(await res.json())
     } catch (err: any) {
@@ -98,10 +101,28 @@ export default function App() {
     return 'Buenas noches'
   }
 
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
+  const navigateDate = (direction: number) => {
+    const d = new Date(selectedDate + 'T12:00:00')
+    d.setDate(d.getDate() + direction)
+    const newDate = d.toLocaleDateString('en-CA')
+    setSelectedDate(newDate)
+    loadCleanings(newDate)
+  }
+
+  const goToday = () => {
+    setSelectedDate(todayStr)
+    loadCleanings(todayStr)
+  }
+
   const todayLabel = (() => {
-    const s = new Date().toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+    const d = new Date(selectedDate + 'T12:00:00')
+    const s = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
     return s.charAt(0).toUpperCase() + s.slice(1)
   })()
+
+  const isToday = selectedDate === todayStr
 
   const ringBg = `conic-gradient(#00E676 ${stats.percent}%, rgba(255,255,255,0.28) ${stats.percent}% 100%)`
 
@@ -131,7 +152,7 @@ export default function App() {
   if (selectedCleaning) return (
     <CleaningChecklist
       cleaning={selectedCleaning}
-      onBack={() => { setSelectedCleaning(null); loadCleanings() }}
+      onBack={() => { setSelectedCleaning(null); loadCleanings(selectedDate) }}
     />
   )
 
@@ -166,9 +187,26 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 mb-4">
+            <button onClick={() => navigateDate(-1)}
+              className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <ChevronLeft className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[11px] font-semibold" style={{ background: 'rgba(0,0,0,0.15)' }}>
               <CalendarIcon className="w-3 h-3 opacity-70" />{todayLabel}
             </div>
+            <button onClick={() => navigateDate(1)}
+              className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <ChevronRight className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
+            {!isToday && (
+              <button onClick={goToday}
+                className="px-2.5 py-1 rounded-full text-[10px] font-bold active:scale-90 transition-all"
+                style={{ background: 'rgba(255,255,255,0.25)', color: 'white' }}>
+                Hoy
+              </button>
+            )}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[11px] font-bold" style={{ background: 'rgba(0,0,0,0.20)', fontFamily: 'monospace' }}>
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75" />
