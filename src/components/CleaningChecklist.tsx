@@ -22,7 +22,6 @@ const C = {
   white:     '#FFFFFF',
 }
 
-const STAFF_ID          = 'rec6CVsLgwP3bZuih'
 const CLOUDINARY_CLOUD  = 'dw93dwwrh'
 const CLOUDINARY_PRESET = 'shineup-ops'
 const MAX_UPLOAD_MB     = 100
@@ -51,6 +50,7 @@ interface InventoryRecord {
 interface Props {
   cleaning: { id: string; propertyText?: string }
   onBack: () => void
+  staffId?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function CleaningChecklist({ cleaning, onBack }: Props) {
+export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVsLgwP3bZuih' }: Props) {
   const [details, setDetails]               = useState<CleaningDetails | null>(null)
   const [tasks, setTasks]                   = useState<Task[]>([])
   const [loading, setLoading]               = useState(true)
