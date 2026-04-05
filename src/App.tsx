@@ -153,6 +153,7 @@ export default function App() {
     <CleaningChecklist
       cleaning={selectedCleaning}
       onBack={() => { setSelectedCleaning(null); loadCleanings(selectedDate) }}
+      staffId={profile?.staff_airtable_id || undefined}
     />
   )
 
