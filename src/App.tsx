@@ -249,7 +249,7 @@ export default function App() {
               {filteredCleanings.length} {filteredCleanings.length === 1 ? 'limpieza' : 'limpiezas'} asignadas
             </p>
           </div>
-          <button onClick={loadCleanings} className="text-xs font-semibold h-8 px-3 bg-white shadow-sm border border-slate-100 rounded-xl" style={{ color: TEAL }}>
+          <button onClick={() => loadCleanings()} className="text-xs font-semibold h-8 px-3 bg-white shadow-sm border border-slate-100 rounded-xl" style={{ color: TEAL }}>
             Actualizar
           </button>
         </div>
@@ -269,7 +269,7 @@ export default function App() {
             <p className="text-4xl">⚠️</p>
             <p className="font-bold text-slate-700">Error al cargar</p>
             <p className="text-slate-400 text-sm">{error}</p>
-            <button onClick={loadCleanings} className="mt-2 px-6 py-2 rounded-xl text-white text-sm font-bold" style={{ background: TEAL }}>Reintentar</button>
+            <button onClick={() => loadCleanings()} className="mt-2 px-6 py-2 rounded-xl text-white text-sm font-bold" style={{ background: TEAL }}>Reintentar</button>
           </div>
         ) : filteredCleanings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
