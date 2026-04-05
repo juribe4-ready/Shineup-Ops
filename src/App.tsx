@@ -233,26 +233,19 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => navigateDate(-1)}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-sm border border-slate-100 active:scale-90 transition-all">
-              <ChevronLeft className="w-4 h-4" style={{ color: TEAL }} />
-            </button>
-            <span className="text-[12px] font-bold text-slate-600">
-              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-            </span>
-            <button onClick={() => navigateDate(1)}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-sm border border-slate-100 active:scale-90 transition-all">
-              <ChevronRight className="w-4 h-4" style={{ color: TEAL }} />
-            </button>
+            <input type="date" value={selectedDate} onChange={e => { setSelectedDate(e.target.value); loadCleanings(e.target.value) }}
+              className="h-8 px-2 rounded-xl text-[12px] font-medium outline-none bg-white shadow-sm border border-slate-100"
+              style={{ color: '#374151', fontFamily: 'Poppins, sans-serif' }} />
             {!isToday && (
               <button onClick={goToday}
-                className="h-8 px-3 rounded-xl text-[11px] font-bold bg-white shadow-sm border border-slate-100"
+                className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[12px] font-bold bg-white shadow-sm border border-slate-100"
                 style={{ color: TEAL }}>
-                Hoy
+                <CalendarIcon className="w-3.5 h-3.5" /> Hoy
               </button>
             )}
-            <button onClick={() => loadCleanings()} className="text-xs font-semibold h-8 px-3 bg-white shadow-sm border border-slate-100 rounded-xl" style={{ color: TEAL }}>
-              Actualizar
+            <button onClick={() => loadCleanings()}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-sm border border-slate-100 active:scale-90 transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: TEAL }}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
             </button>
           </div>
         </div>
