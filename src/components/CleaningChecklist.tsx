@@ -380,7 +380,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     try {
       let photoUrl = ''
       if (photoFile) photoUrl = await uploadToCloudinary(photoFile, () => {})
-      await fetch('/api/createIncident', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID, photoUrl }) })
+      await fetch('/api/createIncident', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: staffId, photoUrl }) })
       showToast('Incidente registrado ✓')
     } catch { showToast('Error al guardar', 'err'); setIncidents(prev => prev.filter(r => r.id !== optimistic.id)) }
     finally { setSavingIncident(false) }
@@ -395,7 +395,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     try {
       let photoUrl = ''
       if (photoFile) photoUrl = await uploadToCloudinary(photoFile, () => {})
-      await fetch('/api/addInventory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: STAFF_ID, photoUrl }) })
+      await fetch('/api/addInventory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: staffId, photoUrl }) })
       showToast('Inventario registrado ✓')
     } catch { showToast('Error al guardar', 'err'); setInventoryRecords(prev => prev.filter(r => r.id !== optimistic.id)) }
     finally { setSavingInventory(false) }
