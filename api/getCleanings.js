@@ -30,10 +30,6 @@ export default async function handler(req, res) {
       const pageData = await airtableRes.json();
       allRecords = allRecords.concat(pageData.records || []);
       offset = pageData.offset || null;
-
-      const hasToday = allRecords.some(r => r.fields['Date'] && r.fields['Date'].startsWith(effectiveDate));
-      const hasFuture = allRecords.some(r => r.fields['Date'] && r.fields['Date'] > effectiveDate);
-      if (hasToday && hasFuture) offset = null;
     } while (offset);
 
     console.log(`[getCleanings] Total: ${allRecords.length}`);
