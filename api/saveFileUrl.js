@@ -1,5 +1,5 @@
 // api/saveFileUrl.js
-// Guarda la URL del archivo en Airtable después del upload directo a B2
+// Guarda SOLO la URL como texto en Airtable - NO como attachment (no duplica storage)
 
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     console.log(`[saveFileUrl] cleaningId: ${cleaningId} | type: ${type} | url: ${publicUrl}`);
 
-    // Primero obtener el registro actual para acumular attachments
+    // Obtener registro actual
     const getRes = await fetch(
       `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1/${cleaningId}`,
       { headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` } }
@@ -41,16 +41,19 @@ export default async function handler(req, res) {
     if (!getRes.ok) throw new Error('Error obteniendo registro de Airtable');
     const record = await getRes.json();
 
-    const fieldName = type === 'video' ? 'VideoInicial' : type === 'storage' ? 'StoragePhoto' : 'Photos & Videos'
-    const existing = record.fields[fieldName] || [];
+    const fields = {};
 
-    // Acumular — no reemplazar
-    const newAttachments = [
-      ...existing.map(a => ({ url: a.url })),
-      { url: publicUrl, filename: filename || 'archivo' }
-    ];
-
-    const fields = { [fieldName]: newAttachments };
+    // Guardar URL como TEXTO en campos URL (no como attachment)
+    if (type === 'video') {
+      // Campo de texto para URLs de video
+      const existing = record.fields['VideoInicialURLs'] || '';
+      fields['VideoInicialURLs'] = existing ? `${existing}\n${publicUrl}` : publicUrl;
+    } else if (type === 'storage') {
+      fields['StoragePhotoURL'] = publicUrl;
+    } else if (type === 'closing') {
+      const existing = record.fields['ClosingMediaURLs'] || '';
+      fields['ClosingMediaURLs'] = existing ? `${existing}\n${publicUrl}` : publicUrl;
+    }
 
     // Si es video inicial, cambiar status a Opened
     if (type === 'video' && record.fields['Status'] === 'Programmed') {
@@ -74,7 +77,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Error guardando en Airtable', detail: err });
     }
 
-    console.log(`[saveFileUrl] Guardado en Airtable OK`);
+    console.log(`[saveFileUrl] Guardado URL como texto en Airtable OK`);
     return res.status(200).json({ success: true, url: publicUrl });
 
   } catch (err) {
