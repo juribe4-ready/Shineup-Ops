@@ -17,6 +17,12 @@ const findAll = async (table, formula) => {
   return data.records || [];
 };
 
+// Parsear URLs de campo de texto (separadas por newline)
+const parseUrlsField = (field) => {
+  if (!field) return [];
+  return field.split('\n').map(u => u.trim()).filter(Boolean);
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -94,19 +100,30 @@ export default async function handler(req, res) {
     const mapsRaw = f['Google Maps URL'];
     const googleMapsUrl = Array.isArray(mapsRaw) ? mapsRaw[0] : (mapsRaw || '');
 
-    const videoInicialRaw = f['VideoInicial'] || f['Video Inicial'] || [];
-    const videoInicial = Array.isArray(videoInicialRaw)
-      ? videoInicialRaw.map(v => v?.thumbnails?.large?.url || v?.url || '').filter(Boolean) : [];
+    // VIDEO INICIAL - Leer de campo texto VideoInicialURLs, fallback a attachment VideoInicial
+    let videoInicial = parseUrlsField(f['VideoInicialURLs']);
+    if (videoInicial.length === 0) {
+      const videoInicialRaw = f['VideoInicial'] || f['Video Inicial'] || [];
+      videoInicial = Array.isArray(videoInicialRaw)
+        ? videoInicialRaw.map(v => v?.thumbnails?.large?.url || v?.url || '').filter(Boolean) : [];
+    }
 
-    const photosVideosRaw = f['Photos & Videos'] || f['PhotosVideos'] || f['Photos Videos'] || [];
-    const photosVideos = Array.isArray(photosVideosRaw)
-      ? photosVideosRaw.filter(p => p?.url).map(p => ({ url: p.url, filename: p.filename || 'archivo' })) : [];
+    // CLOSING MEDIA - Leer de campo texto ClosingMediaURLs, fallback a attachment Photos & Videos
+    let photosVideos = parseUrlsField(f['ClosingMediaURLs']).map(url => ({ url, filename: 'archivo' }));
+    if (photosVideos.length === 0) {
+      const photosVideosRaw = f['Photos & Videos'] || f['PhotosVideos'] || f['Photos Videos'] || [];
+      photosVideos = Array.isArray(photosVideosRaw)
+        ? photosVideosRaw.filter(p => p?.url).map(p => ({ url: p.url, filename: p.filename || 'archivo' })) : [];
+    }
 
-    // StoragePhoto - Attachment field, get first URL
-    const storagePhotoRaw = f['StoragePhoto'] || [];
-    const storagePhoto = Array.isArray(storagePhotoRaw) && storagePhotoRaw[0]
-      ? (storagePhotoRaw[0].thumbnails?.large?.url || storagePhotoRaw[0].url || null)
-      : null;
+    // STORAGE PHOTO - Leer de campo texto StoragePhotoURL, fallback a attachment StoragePhoto
+    let storagePhoto = f['StoragePhotoURL'] || null;
+    if (!storagePhoto) {
+      const storagePhotoRaw = f['StoragePhoto'] || [];
+      storagePhoto = Array.isArray(storagePhotoRaw) && storagePhotoRaw[0]
+        ? (storagePhotoRaw[0].thumbnails?.large?.url || storagePhotoRaw[0].url || null)
+        : null;
+    }
 
     const tasks = taskRecords.map(t => ({
       id: t.id,

@@ -1,5 +1,5 @@
 // api/saveFileUrl.js
-// Guarda SOLO la URL como texto en Airtable - NO como attachment (no duplica storage)
+// Guarda SOLO la URL como texto en Airtable - NO duplica storage
 
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
@@ -43,9 +43,8 @@ export default async function handler(req, res) {
 
     const fields = {};
 
-    // Guardar URL como TEXTO en campos URL (no como attachment)
+    // Guardar URL como TEXTO (múltiples URLs separadas por newline)
     if (type === 'video') {
-      // Campo de texto para URLs de video
       const existing = record.fields['VideoInicialURLs'] || '';
       fields['VideoInicialURLs'] = existing ? `${existing}\n${publicUrl}` : publicUrl;
     } else if (type === 'storage') {
@@ -58,6 +57,7 @@ export default async function handler(req, res) {
     // Si es video inicial, cambiar status a Opened
     if (type === 'video' && record.fields['Status'] === 'Programmed') {
       fields['Status'] = 'Opened';
+      console.log(`[saveFileUrl] Cambiando status a Opened`);
     }
 
     const patchRes = await fetch(
@@ -74,6 +74,7 @@ export default async function handler(req, res) {
 
     if (!patchRes.ok) {
       const err = await patchRes.text();
+      console.error(`[saveFileUrl] Error Airtable:`, err);
       return res.status(500).json({ error: 'Error guardando en Airtable', detail: err });
     }
 
