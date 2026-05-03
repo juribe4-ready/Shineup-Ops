@@ -84,7 +84,7 @@ const isVideoFile = (file: File) => {
 const isVideoUrl = (url: string) =>
   url?.includes('/video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(url || '')
 
-// Upload directly to Supabase Storage (bypasses Vercel 4.5MB limit)
+// Upload directly to Supabase Storage with real progress
 const uploadToSupabase = async (file: File, cleaningId: string, propertyName: string, type: string, onProgress: (pct: number) => void): Promise<string> => {
   const now = new Date()
   const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_')
@@ -93,34 +93,40 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
   const folder = type || 'uploads'
   const path = `${folder}/${timestamp}_${safeProperty}_${cleaningId || 'general'}_${safeName}`
 
-  onProgress(20)
+  const SUPABASE_URL = 'https://jpdajjiaukzilrxwcgtx.supabase.co'
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1OTk4MDQsImV4cCI6MjA2MDE3NTgwNH0.SE6QGxECJ9Wj0BljBNjjNf0gn7ej3YjN-p8yZ-rRHkg'
 
-  try {
-    const { data, error } = await supabase.storage
-      .from('media')
-      .upload(path, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (error) {
-      console.error('Supabase upload error:', error)
-      throw new Error(error.message || 'Upload failed')
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100)
+        onProgress(pct)
+      }
     }
 
-    onProgress(80)
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/media/${path}`
+        console.log('Upload success:', publicUrl)
+        resolve(publicUrl)
+      } else {
+        console.error('Upload failed:', xhr.status, xhr.responseText)
+        reject(new Error(`Upload failed: ${xhr.status}`))
+      }
+    }
 
-    const { data: urlData } = supabase.storage
-      .from('media')
-      .getPublicUrl(path)
+    xhr.onerror = () => {
+      console.error('Upload error')
+      reject(new Error('Upload error'))
+    }
 
-    onProgress(100)
-    console.log('Upload success:', urlData.publicUrl)
-    return urlData.publicUrl
-  } catch (err) {
-    console.error('Upload error:', err)
-    throw err
-  }
+    xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/media/${path}`)
+    xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`)
+    xhr.setRequestHeader('x-upsert', 'false')
+    xhr.send(file)
+  })
 }
 
 const saveUrlToAirtable = (cleaningId: string, type: string, publicUrl: string, filename: string) =>
