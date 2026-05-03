@@ -1,108 +1,60 @@
-import crypto from 'crypto';
+// api/uploadFile.js - Supabase Storage
+import { createClient } from '@supabase/supabase-js'
 
-const BUCKET_NAME = process.env.B2_BUCKET_NAME;
-const ENDPOINT = process.env.B2_ENDPOINT;
-const KEY_ID = process.env.B2_KEY_ID;
-const APP_KEY = process.env.B2_APP_KEY;
-
-async function parseBody(req) {
-  return new Promise((resolve) => {
-    if (req.body && typeof req.body === 'object') return resolve(req.body);
-    if (req.body && typeof req.body === 'string') return resolve(JSON.parse(req.body));
-    let data = '';
-    req.on('data', chunk => { data += chunk; });
-    req.on('end', () => {
-      try { resolve(JSON.parse(data)); }
-      catch { resolve({}); }
-    });
-  });
-}
-
-function hmacSha256(key, message) {
-  return crypto.createHmac('sha256', key).update(message).digest();
-}
-
-function getSignatureKey(key, dateStamp, regionName, serviceName) {
-  const kDate = hmacSha256('AWS4' + key, dateStamp);
-  const kRegion = hmacSha256(kDate, regionName);
-  const kService = hmacSha256(kRegion, serviceName);
-  return hmacSha256(kService, 'aws4_request');
-}
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://jpdajjiaukzilrxwcgtx.supabase.co',
+  process.env.SUPABASE_SERVICE_KEY
+)
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
 
   try {
-    const body = await parseBody(req);
-    const { cleaningId, type, filename, contentType } = body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
+    const { cleaningId, propertyName, type, filename, contentType, fileBase64 } = body
 
-    if (!cleaningId || !filename) {
-      return res.status(400).json({ error: 'cleaningId y filename requeridos' });
+    if (!filename || !fileBase64) {
+      return res.status(400).json({ error: 'filename y fileBase64 requeridos' })
     }
 
-    const timestamp = Date.now();
-    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const key = `${type}/${cleaningId}/${timestamp}_${safeName}`;
+    // Decode base64
+    const buffer = Buffer.from(fileBase64, 'base64')
+    
+    // Generate unique path with property name for easy filtering
+    const now = new Date()
+    const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_')
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const safeProperty = (propertyName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30)
+    const folder = type || 'uploads'
+    
+    // Format: type/YYYY-MM-DD_HH-MM-SS_PropertyName_CleaningId_Filename
+    const path = `${folder}/${timestamp}_${safeProperty}_${cleaningId || 'general'}_${safeName}`
 
-    // Path style: s3.us-east-005.backblazeb2.com/bucket/key
-    const region = ENDPOINT.replace('s3.', '').replace('.backblazeb2.com', '');
-    const host = ENDPOINT; // s3.us-east-005.backblazeb2.com
-    const canonicalUri = `/${BUCKET_NAME}/${key}`;
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('shineup-media')
+      .upload(path, buffer, {
+        contentType: contentType || 'application/octet-stream',
+        upsert: false
+      })
 
-    const now = new Date();
-    const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const amzDateTime = now.toISOString().replace(/[:-]/g, '').replace(/\.\d{3}/, '');
+    if (error) throw error
 
-    const expiresIn = 3600;
-    const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
-    const credential = `${KEY_ID}/${credentialScope}`;
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('shineup-media')
+      .getPublicUrl(path)
 
-    const queryParams = new URLSearchParams({
-      'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-      'X-Amz-Credential': credential,
-      'X-Amz-Date': amzDateTime,
-      'X-Amz-Expires': String(expiresIn),
-      'X-Amz-SignedHeaders': 'host',
-    });
+    const publicUrl = urlData.publicUrl
 
-    const canonicalQueryString = queryParams.toString();
-    const canonicalHeaders = `host:${host}\n`;
-    const signedHeaders = 'host';
-    const payloadHash = 'UNSIGNED-PAYLOAD';
+    console.log(`[uploadFile] Supabase uploaded: ${path}`)
 
-    const canonicalRequest = [
-      'PUT',
-      canonicalUri,
-      canonicalQueryString,
-      canonicalHeaders,
-      signedHeaders,
-      payloadHash,
-    ].join('\n');
-
-    const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDateTime,
-      credentialScope,
-      crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
-    ].join('\n');
-
-    const signingKey = getSignatureKey(APP_KEY, dateStamp, region, 's3');
-    const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-
-    queryParams.append('X-Amz-Signature', signature);
-
-    // Path style URLs
-    const presignedUrl = `https://${host}${canonicalUri}?${queryParams.toString()}`;
-    const publicUrl = `https://${host}${canonicalUri}`;
-
-    console.log(`[uploadFile] Presigned URL (path style) para: ${key}`);
-
-    return res.status(200).json({ presignedUrl, publicUrl, key });
+    return res.status(200).json({ publicUrl, path })
 
   } catch (err) {
-    console.error('[uploadFile] Error:', err);
-    return res.status(500).json({ error: err.message });
+    console.error('[uploadFile] Error:', err)
+    return res.status(500).json({ error: err.message })
   }
 }
