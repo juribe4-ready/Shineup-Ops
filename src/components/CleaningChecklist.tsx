@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase client for direct uploads (bypasses Vercel 4.5MB limit)
+// Supabase client for direct uploads
 const supabase = createClient(
   'https://jpdajjiaukzilrxwcgtx.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1OTk4MDQsImV4cCI6MjA2MDE3NTgwNH0.SE6QGxECJ9Wj0BljBNjjNf0gn7ej3YjN-p8yZ-rRHkg'
