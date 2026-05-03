@@ -4,6 +4,13 @@ import {
   Star, BookOpen, Package, CheckCircle2,
   Plus, X, AlertCircle, ChevronRight, MapPin, Clock, Users, Key
 } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
+
+// Supabase client for direct uploads (bypasses Vercel 4.5MB limit)
+const supabase = createClient(
+  'https://jpdajjiaukzilrxwcgtx.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1OTk4MDQsImV4cCI6MjA2MDE3NTgwNH0.SE6QGxECJ9Wj0BljBNjjNf0gn7ej3YjN-p8yZ-rRHkg'
+)
 
 // ─── Design System ───────────────────────────────────────────────────────────
 const C = {
@@ -22,7 +29,7 @@ const C = {
   white:     '#FFFFFF',
 }
 
-const MAX_UPLOAD_MB = 100
+const MAX_UPLOAD_MB = 500
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type TabType = 'detalle' | 'inicio' | 'reporte' | 'cierre'
@@ -77,49 +84,34 @@ const isVideoFile = (file: File) => {
 const isVideoUrl = (url: string) =>
   url?.includes('/video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(url || '')
 
-// Upload to Supabase Storage via API
+// Upload directly to Supabase Storage (bypasses Vercel 4.5MB limit)
 const uploadToSupabase = async (file: File, cleaningId: string, propertyName: string, type: string, onProgress: (pct: number) => void): Promise<string> => {
-  // Convert file to base64
-  const toBase64 = (f: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1]) // Remove data:...;base64, prefix
-    }
-    reader.onerror = reject
-    reader.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 50))
-    }
-    reader.readAsDataURL(f)
-  })
+  const now = new Date()
+  const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_')
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const safeProperty = (propertyName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30)
+  const folder = type || 'uploads'
+  const path = `${folder}/${timestamp}_${safeProperty}_${cleaningId || 'general'}_${safeName}`
 
   onProgress(10)
-  const fileBase64 = await toBase64(file)
-  onProgress(50)
 
-  const res = await fetch('/api/uploadFile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cleaningId,
-      propertyName,
-      type,
-      filename: file.name,
-      contentType: file.type || 'application/octet-stream',
-      fileBase64
+  const { data, error } = await supabase.storage
+    .from('shineup-media')
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false
     })
-  })
+
+  if (error) throw error
 
   onProgress(90)
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Upload failed: ${err}`)
-  }
+  const { data: urlData } = supabase.storage
+    .from('shineup-media')
+    .getPublicUrl(path)
 
-  const data = await res.json()
   onProgress(100)
-  return data.publicUrl
+  return urlData.publicUrl
 }
 
 const saveUrlToAirtable = (cleaningId: string, type: string, publicUrl: string, filename: string) =>
