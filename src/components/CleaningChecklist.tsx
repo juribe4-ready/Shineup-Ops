@@ -93,25 +93,34 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
   const folder = type || 'uploads'
   const path = `${folder}/${timestamp}_${safeProperty}_${cleaningId || 'general'}_${safeName}`
 
-  onProgress(10)
+  onProgress(20)
 
-  const { data, error } = await supabase.storage
-    .from('shineup-media')
-    .upload(path, file, {
-      cacheControl: '3600',
-      upsert: false
-    })
+  try {
+    const { data, error } = await supabase.storage
+      .from('shineup-media')
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
 
-  if (error) throw error
+    if (error) {
+      console.error('Supabase upload error:', error)
+      throw new Error(error.message || 'Upload failed')
+    }
 
-  onProgress(90)
+    onProgress(80)
 
-  const { data: urlData } = supabase.storage
-    .from('shineup-media')
-    .getPublicUrl(path)
+    const { data: urlData } = supabase.storage
+      .from('shineup-media')
+      .getPublicUrl(path)
 
-  onProgress(100)
-  return urlData.publicUrl
+    onProgress(100)
+    console.log('Upload success:', urlData.publicUrl)
+    return urlData.publicUrl
+  } catch (err) {
+    console.error('Upload error:', err)
+    throw err
+  }
 }
 
 const saveUrlToAirtable = (cleaningId: string, type: string, publicUrl: string, filename: string) =>
