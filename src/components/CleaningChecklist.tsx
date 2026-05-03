@@ -22,9 +22,7 @@ const C = {
   white:     '#FFFFFF',
 }
 
-const CLOUDINARY_CLOUD  = 'dw93dwwrh'
-const CLOUDINARY_PRESET = 'shineup-ops'
-const MAX_UPLOAD_MB     = 100
+const MAX_UPLOAD_MB = 100
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type TabType = 'detalle' | 'inicio' | 'reporte' | 'cierre'
@@ -79,23 +77,49 @@ const isVideoFile = (file: File) => {
 const isVideoUrl = (url: string) =>
   url?.includes('/video/') || /\.(mov|mp4|avi|mkv|webm|m4v|3gp)$/i.test(url || '')
 
-const uploadToCloudinary = (file: File, onProgress: (pct: number) => void): Promise<string> => {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('upload_preset', CLOUDINARY_PRESET)
-  formData.append('folder', 'shineup-ops')
-  const resourceType = isVideoFile(file) ? 'video' : 'image'
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText).secure_url)
-      else reject(new Error(`Upload failed: ${xhr.status}`))
+// Upload to Supabase Storage via API
+const uploadToSupabase = async (file: File, cleaningId: string, propertyName: string, type: string, onProgress: (pct: number) => void): Promise<string> => {
+  // Convert file to base64
+  const toBase64 = (f: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1]) // Remove data:...;base64, prefix
     }
-    xhr.onerror = () => reject(new Error('Upload error'))
-    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`)
-    xhr.send(formData)
+    reader.onerror = reject
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 50))
+    }
+    reader.readAsDataURL(f)
   })
+
+  onProgress(10)
+  const fileBase64 = await toBase64(file)
+  onProgress(50)
+
+  const res = await fetch('/api/uploadFile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cleaningId,
+      propertyName,
+      type,
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      fileBase64
+    })
+  })
+
+  onProgress(90)
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Upload failed: ${err}`)
+  }
+
+  const data = await res.json()
+  onProgress(100)
+  return data.publicUrl
 }
 
 const saveUrlToAirtable = (cleaningId: string, type: string, publicUrl: string, filename: string) =>
@@ -298,7 +322,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     setUploadingVideo(true); setVideoProgress(0)
     try {
       for (const f of Array.from(files)) {
-        const url = await uploadToCloudinary(f, pct => setVideoProgress(pct))
+        const url = await uploadToSupabase(f, cleaning.id, cleaning.propertyText || '', 'video', pct => setVideoProgress(pct))
         await saveUrlToAirtable(cleaning.id, 'video', url, f.name)
         setVideoThumbs(prev => [...prev, url])
       }
@@ -311,7 +335,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     const file = e.target.files?.[0]; if (!file) return
     setUploadingStorage(true); setStorageProgress(0)
     try {
-      const url = await uploadToCloudinary(file, pct => setStorageProgress(pct))
+      const url = await uploadToSupabase(file, cleaning.id, cleaning.propertyText || '', 'storage', pct => setStorageProgress(pct))
       await saveUrlToAirtable(cleaning.id, 'storage', url, file.name)
       setStoragePhoto(url)
       showToast('Foto del almacén guardada ✓')
@@ -324,7 +348,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     setUploadingClosing(true); setClosingProgress(0)
     try {
       for (const f of Array.from(files)) {
-        const url = await uploadToCloudinary(f, pct => setClosingProgress(pct))
+        const url = await uploadToSupabase(f, cleaning.id, cleaning.propertyText || '', 'closing', pct => setClosingProgress(pct))
         await saveUrlToAirtable(cleaning.id, 'closing', url, f.name)
         setClosingPhotos(prev => [...prev, { url, filename: f.name }])
       }
@@ -379,7 +403,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     setNewIncName(''); setNewIncComment(''); setNewIncPhoto(null); setNewIncPhotoFile(null)
     try {
       let photoUrl = ''
-      if (photoFile) photoUrl = await uploadToCloudinary(photoFile, () => {})
+      if (photoFile) photoUrl = await uploadToSupabase(photoFile, cleaning.id, cleaning.propertyText || '', 'incident', () => {})
       await fetch('/api/createIncident', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: staffId, photoUrl }) })
       showToast('Incidente registrado ✓')
     } catch { showToast('Error al guardar', 'err'); setIncidents(prev => prev.filter(r => r.id !== optimistic.id)) }
@@ -394,7 +418,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     setNewInvStatus('Low'); setNewInvComment(''); setNewInvPhoto(null); setNewInvPhotoFile(null)
     try {
       let photoUrl = ''
-      if (photoFile) photoUrl = await uploadToCloudinary(photoFile, () => {})
+      if (photoFile) photoUrl = await uploadToSupabase(photoFile, cleaning.id, cleaning.propertyText || '', 'inventory', () => {})
       await fetch('/api/addInventory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, comment, propertyId: details?.propertyId, cleaningId: cleaning.id, staffId: staffId, photoUrl }) })
       showToast('Inventario registrado ✓')
     } catch { showToast('Error al guardar', 'err'); setInventoryRecords(prev => prev.filter(r => r.id !== optimistic.id)) }
