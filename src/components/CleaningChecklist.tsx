@@ -97,7 +97,7 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
 
   try {
     const { data, error } = await supabase.storage
-      .from('shineup-media')
+      .from('media')
       .upload(path, file, {
         cacheControl: '3600',
         upsert: false
@@ -111,7 +111,7 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
     onProgress(80)
 
     const { data: urlData } = supabase.storage
-      .from('shineup-media')
+      .from('media')
       .getPublicUrl(path)
 
     onProgress(100)
