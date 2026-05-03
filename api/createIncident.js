@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     if (cleaningId) fields['Cleaning ID'] = [cleaningId];
     if (staffId) fields['Reported By'] = [staffId];
     if (photoUrl) {
-      fields['Photos'] = [{ url: photoUrl }];
+      // Solo guardar URL como texto, NO como attachment
       fields['MediaURL'] = photoUrl;
     }
 
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       name: data.fields?.Name || name,
       status: 'Reported',
       comment: comment || '',
-      photoUrls: [],
+      photoUrls: photoUrl ? [photoUrl] : [],
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

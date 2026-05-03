@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     if (cleaningId) fields['Cleanings'] = [cleaningId];
     if (staffId) fields['Reported By'] = [staffId];
     if (photoUrl) {
-      fields['Attachments'] = [{ url: photoUrl }];
+      // Solo guardar URL como texto, NO como attachment
       fields['MediaURL'] = photoUrl;
     }
 
