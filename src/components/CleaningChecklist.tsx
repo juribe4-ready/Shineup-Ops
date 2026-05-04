@@ -4,7 +4,14 @@ import {
   Star, BookOpen, Package, CheckCircle2,
   Plus, X, AlertCircle, ChevronRight, MapPin, Clock, Users, Key
 } from 'lucide-react'
-import { supabase } from '../AuthContext'
+import { createClient } from '@supabase/supabase-js'
+
+// Cliente separado SOLO para storage uploads (usa anon key diferente)
+const storageClient = createClient(
+  'https://jpdajjiaukzilrxwcgtx.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1OTk4MDQsImV4cCI6MjA2MDE3NTgwNH0.SE6QGxECJ9Wj0BljBNjjNf0gn7ej3YjN-p8yZ-rRHkg',
+  { auth: { persistSession: false, autoRefreshToken: false } }
+)
 
 // ─── Design System ───────────────────────────────────────────────────────────
 const C = {
@@ -103,7 +110,7 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
   }, intervalMs)
 
   try {
-    const { data, error } = await supabase.storage
+    const { data, error } = await storageClient.storage
       .from('media')
       .upload(path, file, {
         cacheControl: '3600',
@@ -119,7 +126,7 @@ const uploadToSupabase = async (file: File, cleaningId: string, propertyName: st
 
     onProgress(95)
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = storageClient.storage
       .from('media')
       .getPublicUrl(path)
 
