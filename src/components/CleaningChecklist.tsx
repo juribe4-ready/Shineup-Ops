@@ -341,10 +341,12 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     try {
       for (const f of Array.from(files)) {
         const url = await uploadToSupabase(f, cleaning.id, cleaning.propertyText || '', 'video', pct => setVideoProgress(pct))
+        setVideoProgress(100)
         await saveUrlToAirtable(cleaning.id, 'video', url, f.name)
         setVideoThumbs(prev => [...prev, url])
       }
       showToast('Video subido ✓')
+      await new Promise(r => setTimeout(r, 500)) // Mostrar 100% por medio segundo
     } catch { showToast('Error al subir', 'err') }
     finally { setUploadingVideo(false); setVideoProgress(0); if (videoInputRef.current) videoInputRef.current.value = '' }
   }
@@ -354,9 +356,11 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     setUploadingStorage(true); setStorageProgress(0)
     try {
       const url = await uploadToSupabase(file, cleaning.id, cleaning.propertyText || '', 'storage', pct => setStorageProgress(pct))
+      setStorageProgress(100)
       await saveUrlToAirtable(cleaning.id, 'storage', url, file.name)
       setStoragePhoto(url)
       showToast('Foto del almacén guardada ✓')
+      await new Promise(r => setTimeout(r, 500))
     } catch { showToast('Error al subir', 'err') }
     finally { setUploadingStorage(false); setStorageProgress(0); if (storageInputRef.current) storageInputRef.current.value = '' }
   }
@@ -367,10 +371,12 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     try {
       for (const f of Array.from(files)) {
         const url = await uploadToSupabase(f, cleaning.id, cleaning.propertyText || '', 'closing', pct => setClosingProgress(pct))
+        setClosingProgress(100)
         await saveUrlToAirtable(cleaning.id, 'closing', url, f.name)
         setClosingPhotos(prev => [...prev, { url, filename: f.name }])
       }
       showToast('Archivo subido ✓')
+      await new Promise(r => setTimeout(r, 500))
     } catch { showToast('Error al subir', 'err') }
     finally { setUploadingClosing(false); setClosingProgress(0); if (closingInputRef.current) closingInputRef.current.value = '' }
   }
