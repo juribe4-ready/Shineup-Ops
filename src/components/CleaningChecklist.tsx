@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 // Cliente separado SOLO para storage uploads (usa anon key diferente)
 const storageClient = createClient(
   'https://jpdajjiaukzilrxwcgtx.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1OTk4MDQsImV4cCI6MjA2MDE3NTgwNH0.SE6QGxECJ9Wj0BljBNjjNf0gn7ej3YjN-p8yZ-rRHkg',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZGFqamlhdWt6aWxyeHdjZ3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODM5ODIsImV4cCI6MjA4OTQ1OTk4Mn0.IRMW4Z4azVy6xKqGYb39tD91onTKhdnYnDTvO3ouYtE',
   { auth: { persistSession: false, autoRefreshToken: false } }
 )
 
