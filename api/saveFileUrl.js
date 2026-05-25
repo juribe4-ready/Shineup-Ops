@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     }
 
     // Si es video inicial, cambiar status a Opened
-    if (type === 'video' && record.fields['Status'] === 'Programmed') {
+    if (type === 'video' && (record.fields['Status'] === 'Programmed' || record.fields['Status'] === 'Scheduled')) {
       fields['Status'] = 'Opened';
       console.log(`[saveFileUrl] Cambiando status a Opened`);
     }
