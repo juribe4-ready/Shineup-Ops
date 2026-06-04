@@ -100,15 +100,20 @@ async function getBilling(headers, query) {
     let clientOffset = null
     do {
       const cr = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/${CLIENTS_TABLE}${clientOffset ? `?offset=${clientOffset}` : ''}`, { headers })
-      if (!cr.ok) break
+      if (!cr.ok) {
+        const errText = await cr.text()
+        console.error('[getBilling] clients fetch failed:', cr.status, errText)
+        break
+      }
       const cd = await cr.json()
+      console.log('[getBilling] clients fetched:', cd.records?.length, 'first record fields:', JSON.stringify(cd.records?.[0]?.fields))
       for (const c of (cd.records || [])) {
-        // Primary field is whatever Airtable uses as display name — try common field names
-        const name = c.fields?.['Full name'] || c.fields?.['Name'] || c.fields?.['Client Name'] || c.fields?.['First Name'] || null
+        const name = c.fields?.['Full name'] || c.fields?.['Name'] || c.fields?.['Client Name'] || Object.values(c.fields || {})[0] || null
         clientsMap[c.id] = name
       }
       clientOffset = cd.offset || null
     } while (clientOffset)
+    console.log('[getBilling] clientsMap size:', Object.keys(clientsMap).length)
   } catch(e) { console.error('[getBilling] clients fetch error:', e.message) }
 
   // Enrich with Client Name and Source from Appointments (best-effort, won't affect cleaning list)
@@ -160,13 +165,20 @@ async function getBilling(headers, query) {
     const cleaningClientRaw = Array.isArray(f['Client']) && f['Client'].length > 0
       ? f['Client'][f['Client'].length - 1]
       : null
-    const apptClientRaw = apptMap[rec.id]?.clientName || null
+    const apptClientRaw = (() => {
+      const raw = apptMap[rec.id]?.clientName || null
+      if (!raw) return null
+      return Array.isArray(raw) ? raw[0] : raw
+    })()
     const resolveClient = (raw) => {
       if (!raw) return null
       if (/^rec[A-Za-z0-9]{8,}$/.test(raw)) return clientsMap[raw] || null
       return raw
     }
     const clientName = resolveClient(cleaningClientRaw) || resolveClient(apptClientRaw) || f['Client Name Text'] || null
+    if (rec.id === 'recjiGUdQbeReKqtd' || rec.id === 'recpC9nCLTDHD5wQx') {
+      console.log(`[DEBUG] ${rec.id}: Client field=${JSON.stringify(f['Client'])}, cleaningClientRaw=${cleaningClientRaw}, resolved=${resolveClient(cleaningClientRaw)}, apptClientRaw=${apptClientRaw}, final=${clientName}`)
+    }
     return {
       id: rec.id, date: f['Date'] || null,
       property: f['Property Text'] || 'Sin propiedad',
