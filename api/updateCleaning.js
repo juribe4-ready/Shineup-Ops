@@ -41,6 +41,7 @@ export default async function handler(req, res) {
 
     const fields = {}
     if (status !== undefined)       fields['Status'] = status
+    if (status === 'Done')          fields['Payment Status'] = 'unpaid'
     if (startTime !== undefined)    fields['Start Time'] = startTime
     if (endTime !== undefined)      fields['End Time'] = endTime
     if (openComments !== undefined) fields['OpenComments'] = openComments
