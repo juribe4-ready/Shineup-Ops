@@ -41,7 +41,6 @@ export default async function handler(req, res) {
 
     const fields = {}
     if (status !== undefined)       fields['Status'] = status
-    if (status === 'Done')          fields['Payment Status'] = 'unpaid'
     if (startTime !== undefined)    fields['Start Time'] = startTime
     if (endTime !== undefined)      fields['End Time'] = endTime
     if (openComments !== undefined) fields['OpenComments'] = openComments
@@ -64,6 +63,15 @@ export default async function handler(req, res) {
 
     const updated = await airtableRes.json()
     const propertyText = updated.fields?.['Property Text'] || 'Limpieza'
+
+    // Set Payment Status in a separate call so it never blocks the main Done update
+    if (status === 'Done') {
+      fetch(url, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 'Payment Status': 'unpaid' } })
+      }).catch(e => console.error('[updateCleaning] Payment Status update failed:', e.message))
+    }
 
     // Send push notification on status change
     if (status && SUPABASE_SERVICE_KEY) {
