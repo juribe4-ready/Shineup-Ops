@@ -152,15 +152,17 @@ async function getBilling(headers, query) {
     const payStatus  = rawPayStatus 
       ? rawPayStatus.toLowerCase()
       : (status === 'Done' ? 'unpaid' : null)
-    // Resolve client: try apptMap first (may have ID or name), then cleaning's own Client field
+    // Client field on the Cleaning is the source of truth — apptMap as fallback only
+    const cleaningClientRaw = Array.isArray(f['Client']) && f['Client'].length > 0
+      ? f['Client'][f['Client'].length - 1]
+      : null
     const apptClientRaw = apptMap[rec.id]?.clientName || null
-    const cleaningClientRaw = Array.isArray(f['Client']) ? f['Client'][0] : null
     const resolveClient = (raw) => {
       if (!raw) return null
       if (/^rec[A-Za-z0-9]{8,}$/.test(raw)) return clientsMap[raw] || null
       return raw
     }
-    const clientName = resolveClient(apptClientRaw) || resolveClient(cleaningClientRaw) || f['Client Name Text'] || null
+    const clientName = resolveClient(cleaningClientRaw) || resolveClient(apptClientRaw) || f['Client Name Text'] || null
     return {
       id: rec.id, date: f['Date'] || null,
       property: f['Property Text'] || 'Sin propiedad',
