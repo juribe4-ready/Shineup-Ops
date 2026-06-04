@@ -99,10 +99,14 @@ async function getBilling(headers, query) {
   try {
     let clientOffset = null
     do {
-      const cr = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/${CLIENTS_TABLE}?fields[]=Name${clientOffset ? `&offset=${clientOffset}` : ''}`, { headers })
+      const cr = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/${CLIENTS_TABLE}${clientOffset ? `?offset=${clientOffset}` : ''}`, { headers })
       if (!cr.ok) break
       const cd = await cr.json()
-      for (const c of (cd.records || [])) clientsMap[c.id] = c.fields?.Name || null
+      for (const c of (cd.records || [])) {
+        // Primary field is whatever Airtable uses as display name — try common field names
+        const name = c.fields?.['Full name'] || c.fields?.['Name'] || c.fields?.['Client Name'] || c.fields?.['First Name'] || null
+        clientsMap[c.id] = name
+      }
       clientOffset = cd.offset || null
     } while (clientOffset)
   } catch(e) { console.error('[getBilling] clients fetch error:', e.message) }
