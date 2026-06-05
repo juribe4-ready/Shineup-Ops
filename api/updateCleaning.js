@@ -64,13 +64,19 @@ export default async function handler(req, res) {
     const updated = await airtableRes.json()
     const propertyText = updated.fields?.['Property Text'] || 'Limpieza'
 
-    // Set Payment Status in a separate call so it never blocks the main Done update
+    // Set Payment Status to Unpaid when Done — using await to catch errors
     if (status === 'Done') {
-      fetch(url, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { 'Payment Status': 'unpaid' } })
-      }).catch(e => console.error('[updateCleaning] Payment Status update failed:', e.message))
+      try {
+        const psRes = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { 'Payment Status': 'Unpaid' } })
+        })
+        if (!psRes.ok) {
+          const psErr = await psRes.text()
+          console.error('[updateCleaning] Payment Status failed:', psErr)
+        }
+      } catch(e) { console.error('[updateCleaning] Payment Status error:', e.message) }
     }
 
     // Send push notification on status change
