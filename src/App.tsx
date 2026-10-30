@@ -8,6 +8,7 @@ import { usePushNotifications } from './usePushNotifications'
 import LaundryTools from './laundry/LaundryTools'
 import { LAUNDRY_ENABLED } from './laundry/api'
 import { startOutbox } from './laundry/outbox'
+import AssignedLoad from './shift/AssignedLoad'
 import { ShiftTab, CloseShiftPage, RollCallSheet } from './shift/ShiftPage'
 import { Shift, Person, getShifts, startShifts, fromInput, reopenShifts } from './shift/shiftApi'
 
@@ -56,12 +57,14 @@ export default function App() {
   const [showClose, setShowClose]           = useState(false)
   const [laundryMode, setLaundryMode]       = useState<null | 'scan' | 'shift' | 'load'>(null)
   const [loadRefresh, setLoadRefresh]       = useState(0)
+  const [warmLoad, setWarmLoad]             = useState(false)
   const stripRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
 
   // Laundry: reenvía lo que quedó pendiente por falta de señal (también mientras se está en un checklist)
   const [lToast, setLToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   useEffect(() => { if (LAUNDRY_ENABLED && user) return startOutbox() }, [user])
+  useEffect(() => { if (!todayCleanings.length) return; const t = setTimeout(() => setWarmLoad(true), 4000); return () => clearTimeout(t) }, [todayCleanings.length])
   const laundryToast = (msg: string, type: 'ok' | 'err' = 'ok') => { setLToast({ msg, type }); setTimeout(() => setLToast(null), 3500) }
 
   // Mantiene el dia seleccionado visible (centrado) en la tira de dias
@@ -272,6 +275,8 @@ export default function App() {
         </div>
 
         {toastEl}
+        {/* Precarga (oculta) de maletas/kits de hoy para mostrar su avance en cada casa de la agenda. Espera unos segundos para no competir con la carga de la agenda. */}
+        {warmLoad && tab === 'agenda' && LAUNDRY_ENABLED && <div style={{ display: 'none' }}><AssignedLoad cleanings={todayCleanings as any} refreshKey={loadRefresh} onScan={() => {}} /></div>}
         <div className="px-5"><LaundryTools hideButtons forceMode={laundryMode} onModeClose={() => setLaundryMode(null)} onToast={laundryToast} cleanings={todayCleanings} onChanged={() => setLoadRefresh(n => n + 1)} /></div>
 
         <div className="px-5" style={{ display: tab === 'agenda' ? 'block' : 'none' }}>
@@ -312,9 +317,8 @@ export default function App() {
             })}
           </div>
 
-          </div>
 
-          {/* Resumen del dia: barra + pills de estado (filtran) */}
+          {/* Resumen del dia: barra + pills de estado (filtran) — también fijo */}
           {!loadingData && !error && cleanings.length > 0 && (
             <div className="rounded-2xl bg-white p-3 mt-1 mb-3" style={{ border: '1px solid #E2E8F0' }}>
               <div className="flex items-end gap-3 mb-2.5">
@@ -347,6 +351,8 @@ export default function App() {
               </div>
             </div>
           )}
+
+          </div>
 
           {/* Buscar */}
           <div className="relative mb-3">
