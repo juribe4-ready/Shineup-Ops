@@ -75,7 +75,7 @@ function ShiftLoad({ onClose, onToast }: { onClose: () => void; onToast: (m: str
   }
   return (
     <Modal title="Carga de turno" onClose={onClose} footer={<Big onClick={send} disabled={busy || codes.length === 0}>Confirmar carga ({codes.length})</Big>}>
-      <p className="text-[12px]" style={{ color: L.slate }}>Escanea cada maleta que subes a la van (una por una: C-014-1, C-014-2…). Quedan «In Use» contigo. Insumos y herramientas se sumarán después.</p>
+      <p className="text-[12px]" style={{ color: L.slate }}>Escanea cada maleta que subes a la van (una por una, con el QR de su etiqueta). Quedan «In Use» contigo. Insumos y herramientas se sumarán después.</p>
       <Scanner onCode={add} />
       <div className="flex flex-wrap gap-2">
         {codes.map(c => <button key={c} onClick={() => setCodes(l => l.filter(x => x !== c))} className="px-3 py-1.5 rounded-full text-[12px] font-bold" style={{ background: L.ink, color: 'white' }}>{c} ×</button>)}
