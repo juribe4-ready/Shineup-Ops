@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Package, Wrench, ScanLine, Check } from 'lucide-react'
 import { LAUNDRY_ENABLED, lGet } from '../laundry/api'
-import { Equip, setEquipment, getChecked, setChecked, subscribeLoad } from './loadStore'
+import { Equip, setEquipment, getChecked, setChecked, subscribeLoad, setUnits, getUnits, unitCodesOf, unitIsLoaded, BagUnit } from './loadStore'
+import { Modal, L } from '../laundry/ui'
 
 const TEAL = '#0E7C86'
-interface Cl { id: string; propertyId?: string | null; propertyText?: string }
+interface Cl { id: string; propertyId?: string | null; propertyText?: string; status?: string }
 
 // Caché de la sesión: los kits/herramientas de cada limpieza casi no cambian
 const equipCache = new Map<string, Equip[]>()
@@ -15,9 +16,11 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
   const [bagErr, setBagErr] = useState('')
   const [equip, setEquip] = useState<Equip[] | null>(null)
   const [checked, setCheckedState] = useState<Set<string>>(getChecked())
+  const [units, setUnitsState] = useState<BagUnit[]>(getUnits())
+  const [info, setInfo] = useState<BagUnit | null>(null)
   const key = cleanings.map(c => c.id).join(',')
 
-  useEffect(() => subscribeLoad(() => setCheckedState(getChecked())), [])
+  useEffect(() => subscribeLoad(() => { setCheckedState(getChecked()); setUnitsState(getUnits()) }), [])
 
   // Pool con concurrencia limitada + reintentos (Airtable limita ~5 consultas/seg: 14 casas en paralelo daba error 429)
   const pool = async <T,>(items: string[], n: number, fn: (x: string) => Promise<T>) => {
@@ -48,9 +51,17 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
       const res = await pool(props, 3, p => lGet<{ bags: any[] }>('bagsByProperty', { propertyId: p }).then(r => r.bags))
       const seen = new Set<string>(); const list: any[] = []
       for (const r of res) for (const b of (r.v || [])) if (!seen.has(b.id)) { seen.add(b.id); list.push(b) }
+      // una fila por maleta física
+      const us: BagUnit[] = []
+      for (const r of res) for (const b of (r.v || [])) {
+        if (us.some(u => u.bagId === b.id)) continue
+        const house = (b.properties || []).filter((p: any) => props.includes(p.id)).map((p: any) => p.name).join(' · ') || b.name
+        const opened = cleanings.some(c => c.propertyId && (b.properties || []).some((p: any) => p.id === c.propertyId) && (c.status === 'In Progress' || c.status === 'Done'))
+        unitCodesOf(b).forEach((code, i) => us.push({ code, bagId: b.id, propertyId: r.item, house, n: i + 1, of: Math.max(1, b.qty || 1), loaded: unitIsLoaded(b.cycle, i + 1), state: b.cycle?.state || b.state || null, opened }))
+      }
       const failed = res.filter(r => !r.ok).length
       if (!alive) return
-      setBags(list)
+      setBags(list); setUnits(us)
       setBagErr(failed ? `No pude leer las maletas de ${failed} casa${failed > 1 ? 's' : ''} (Airtable está saturado).` : '')
     })()
     return () => { alive = false }
@@ -78,22 +89,22 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
     return () => { alive = false }
   }, [key, retry])
 
-  const loadedBag = (b: any) => b.cycle?.state === 'In Use'
-  const missingBags = (bags || []).filter(b => !loadedBag(b)).length
+  const missingBags = units.filter(u => !u.loaded).length
   const missingEq = (equip || []).filter(e => !checked.has(e.code.toUpperCase())).length
   const missing = missingBags + missingEq
-  const totBags = (bags || []).length, totEq = (equip || []).length
+  const totBags = units.length, totEq = (equip || []).length
   const okBags = totBags - missingBags, okEq = totEq - missingEq
   const tot = totBags + totEq, ok = okBags + okEq
   const pct = tot ? Math.round((ok / tot) * 100) : 0
+  // casas: cuántas ya tienen TODAS sus maletas cargadas
+  const houses = [...new Set(units.map(u => u.propertyId))]
+  const housesOk = houses.filter(h => units.filter(u => u.propertyId === h).every(u => u.loaded)).length
 
-  const chip = (b: any) => {
-    const st = b.cycle?.state || b.state || 'sin estado'
-    if (st === 'In Use') return { t: 'Cargada ✓', bg: '#E8F8EF', fg: '#15803D' }
-    if (st === 'Clean') return { t: 'Lista · falta cargar', bg: '#FEF3C7', fg: '#92400E' }
-    return { t: st === 'Dirty' ? 'Sucia' : st, bg: '#F1F5F9', fg: '#475569' }
+  const chip = (u: BagUnit) => {
+    if (u.loaded) return { t: 'Cargada ✓', bg: '#E8F8EF', fg: '#15803D' }
+    if (u.state === 'Clean' || u.state === 'In Use') return u.opened ? { t: 'Casa abierta · sin escanear', bg: '#FEE2E2', fg: '#B91C1C' } : { t: 'Lista · falta cargar', bg: '#FEF3C7', fg: '#92400E' }
+    return { t: u.state === 'Dirty' ? 'Sucia' : (u.state || 'sin estado'), bg: '#F1F5F9', fg: '#475569' }
   }
-  const houseOf = (b: any) => (b.properties || []).map((p: any) => p.name).join(' · ') || b.name
 
   return (
     <div className="p-4" style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16 }}>
@@ -124,32 +135,30 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: ok === tot ? '#16A34A' : TEAL }} />
           </div>
           <div className="flex gap-2 mt-2">
-            <div className="flex-1 rounded-xl px-3 py-2" style={{ background: '#F1F5F9' }}>
-              <p className="text-[10px] font-bold uppercase" style={{ color: '#64748B' }}>Maletas</p>
-              <p className="text-[15px] font-extrabold" style={{ color: okBags === totBags ? '#15803D' : '#0F172A' }}>{okBags}<span className="text-[12px] font-bold" style={{ color: '#94A3B8' }}> / {totBags}</span></p>
-            </div>
-            <div className="flex-1 rounded-xl px-3 py-2" style={{ background: '#F1F5F9' }}>
-              <p className="text-[10px] font-bold uppercase" style={{ color: '#64748B' }}>Kits y herramientas</p>
-              <p className="text-[15px] font-extrabold" style={{ color: okEq === totEq ? '#15803D' : '#0F172A' }}>{okEq}<span className="text-[12px] font-bold" style={{ color: '#94A3B8' }}> / {totEq}</span></p>
-            </div>
+            {([['Casas listas', housesOk, houses.length], ['Maletas', okBags, totBags], ['Kits y herr.', okEq, totEq]] as const).map(([lab, a2, t2]) => (
+              <div key={lab} className="flex-1 rounded-xl px-2.5 py-2" style={{ background: '#F1F5F9' }}>
+                <p className="text-[10px] font-bold uppercase" style={{ color: '#64748B' }}>{lab}</p>
+                <p className="text-[15px] font-extrabold" style={{ color: a2 === t2 ? '#15803D' : '#0F172A' }}>{a2}<span className="text-[12px] font-bold" style={{ color: '#94A3B8' }}> / {t2}</span></p>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Maletas */}
-      <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Package className="inline w-3 h-3 mr-1" />Maletas</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Package className="inline w-3 h-3 mr-1" />Maletas · toca una para ver qué contiene</p>
       {bags === null ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Cargando…</p>
         : !LAUNDRY_ENABLED ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Lavandería no está conectada.</p>
-        : (bags.length === 0 && !bagErr) ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Ninguna casa de hoy tiene maletas asignadas.</p>
-        : bags.map(b => { const c = chip(b); return (
-          <div key={b.id} className="flex items-center gap-3 py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
+        : (units.length === 0 && !bagErr) ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Ninguna casa de hoy tiene maletas asignadas.</p>
+        : units.map(u => { const c = chip(u); return (
+          <button key={u.code} onClick={() => setInfo(u)} className="w-full flex items-center gap-3 py-2 text-left" style={{ borderTop: '1px solid #F1F5F9' }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#E6F6F7', color: TEAL }}><Package className="w-4 h-4" /></div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-[13px] truncate" style={{ color: '#0F172A' }}>{b.code || b.name}{b.qty > 1 ? ` · ${b.qty} maletas` : ''}</p>
-              <p className="text-[11px] truncate" style={{ color: '#64748B' }}>{houseOf(b)}</p>
+              <p className="font-bold text-[13px] truncate" style={{ color: '#0F172A' }}>{u.house}</p>
+              <p className="text-[11px] truncate" style={{ color: '#64748B' }}>{u.code}{u.of > 1 ? ` · maleta ${u.n} de ${u.of}` : ''}</p>
             </div>
             <span className="text-[10.5px] font-bold px-2 py-1 rounded-full shrink-0" style={{ background: c.bg, color: c.fg }}>{c.t}</span>
-          </div>
+          </button>
         ) })}
 
       {/* Kits y herramientas */}
@@ -171,6 +180,32 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
       <button onClick={onScan} className="w-full mt-3 py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2" style={{ border: `1.5px solid ${TEAL}`, color: TEAL }}>
         <ScanLine className="w-4 h-4" />Escanear carga
       </button>
+      {info && <BagContents unit={info} onClose={() => setInfo(null)} />}
     </div>
+  )
+}
+
+
+// Qué mandó lavandería en esa maleta (contenido final si está Clean; si no, el estándar de la casa)
+function BagContents({ unit, onClose }: { unit: BagUnit; onClose: () => void }) {
+  const [data, setData] = useState<any | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { lGet<any>('bag', { code: unit.code }).then(setData).catch(e => setErr(e.message || 'No pude leer la maleta')) }, [unit.code])
+  const st = data?.cycle?.state || data?.bag?.state || unit.state
+  const useFinal = st === 'Clean' && data?.cycle?.finalContent?.counts
+  const counts: Record<string, number> = data ? (useFinal ? data.cycle.finalContent.counts : (data.bag?.standard || {})) : {}
+  return (
+    <Modal title={unit.house} onClose={onClose}>
+      <p className="text-[12px]" style={{ color: L.slate }}>{unit.code}{unit.of > 1 ? ` · maleta ${unit.n} de ${unit.of}` : ''} · estado <b>{st || 'sin estado'}</b></p>
+      {!data && !err && <p className="text-[12px]" style={{ color: L.muted }}>Cargando…</p>}
+      {err && <p className="text-[12px] font-semibold" style={{ color: L.red }}>{err}</p>}
+      {data && (
+        <div className="rounded-2xl p-4" style={{ background: '#fff', border: `1px solid ${L.border}` }}>
+          <p className="text-[11px] font-semibold" style={{ color: L.slate }}>{useFinal ? 'Lo que mandó lavandería' : 'Total de la casa (aún sin confirmar por lavandería)'}</p>
+          {Object.entries(counts).map(([k, v]) => <div key={k} className="flex justify-between text-[13px] py-1" style={{ borderTop: '1px solid #F1F5F9' }}><span>{k}</span><b>{v}</b></div>)}
+          {!Object.keys(counts).length && <p className="text-[12px]" style={{ color: L.muted }}>Esta maleta no tiene contenido definido.</p>}
+        </div>
+      )}
+    </Modal>
   )
 }

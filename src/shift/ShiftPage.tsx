@@ -111,7 +111,7 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
           </div>
           <div className="p-4" style={card}>
             <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#64748B' }}>Casas de hoy</p>
-            <p className="font-bold text-[14px] mt-1" style={{ color: '#0F172A' }}>{done} de {todayCleanings.length} terminadas</p>
+            <p className="mt-1" style={{ color: '#0F172A' }}><span className="font-black text-[28px] leading-none">{todayCleanings.length}</span> <span className="font-bold text-[13px]" style={{ color: '#475569' }}>{todayCleanings.length === 1 ? 'casa' : 'casas'} hoy · {done} terminadas</span></p>
             {inProg.length > 0 && <p className="text-[12px]" style={{ color: '#64748B' }}>{inProg.length} In Progress: {inProg.map(c => c.propertyText).join(', ')}</p>}
           </div>
         </>

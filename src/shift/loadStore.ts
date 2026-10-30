@@ -22,3 +22,21 @@ export function setChecked(code: string, on: boolean) {
   try { localStorage.setItem(key(), JSON.stringify([...s])) } catch { /* sin almacenamiento: queda solo en pantalla */ }
   notify()
 }
+
+// ── Maletas físicas asignadas hoy (una por unidad: una casa puede tener 2) ──
+export interface BagUnit { code: string; bagId: string; propertyId: string; house: string; n: number; of: number; loaded: boolean; state: string | null; opened: boolean }
+let units: BagUnit[] = []
+export const setUnits = (u: BagUnit[]) => { units = u; notify() }
+export const getUnits = () => units
+export const markUnitLoaded = (code: string) => { units = units.map(u => u.code.toUpperCase() === code.toUpperCase() ? { ...u, loaded: true } : u); notify() }
+
+// Códigos de cada maleta de un conjunto: M-CH-LI-1 con 2 maletas → M-CH-LI-1, M-CH-LI-2
+export function unitCodesOf(bag: { code?: string | null; qty?: number }): string[] {
+  const n = Math.max(1, bag.qty || 1)
+  const code = String(bag.code || '').toUpperCase()
+  if (!code) return []
+  const m = code.match(/^(M-[A-Z0-9]{2}-[A-Z0-9]{2})-(\d{1,2})$/)
+  return Array.from({ length: n }, (_, i) => m ? `${m[1]}-${Number(m[2]) + i}` : `${code}-${i + 1}`)
+}
+// ¿esa maleta (n = 1..qty) ya salió con el cleaner?
+export const unitIsLoaded = (cycle: any, n: number) => cycle?.state === 'In Use' && (!(cycle.unitsOut || []).length || cycle.unitsOut.includes(n))
