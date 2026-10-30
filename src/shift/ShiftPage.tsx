@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Play, Square, ScanLine, Package, Users, AlertTriangle, Check } from 'lucide-react'
-import { Shift, Person, fmtTime, hoursText, toInput, fromInput, closeShifts, lastClosedBy } from './shiftApi'
+import { Shift, Person, fmtTime, hoursText, toInput, fromInput, closeShifts, reopenShifts, updateShift, lastClosedBy } from './shiftApi'
+import { splitShift, fmtH } from './splitTime'
 import AssignedLoad from './AssignedLoad'
 
 const TEAL = '#0E7C86'
@@ -47,12 +48,14 @@ export function RollCallSheet({ title, sub, team, busy, confirmLabel, onConfirm,
 }
 
 // ── Pestaña Turno ──
-export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, missing, onAddMissing, onStart, onScanLoad, onClose, onReload, onReopen, refreshKey }: {
+export function ShiftTab({ date, by, shifts, shiftsError, team, todayCleanings, missing, onAddMissing, onStart, onScanLoad, onClose, onReload, onReopen, refreshKey, onToast }: {
+  by: string; onToast: (m: string, t?: 'ok' | 'err') => void
   date: string; shifts: Shift[] | null; shiftsError: string; team: Person[]; missing: Person[]; onAddMissing: () => void
-  todayCleanings: { id: string; propertyId?: string | null; propertyText?: string; status?: string }[]
+  todayCleanings: { id: string; propertyId?: string | null; propertyText?: string; status?: string; startTime?: string | null; endTime?: string | null; staffIds?: string[] }[]
   onStart: () => void; onScanLoad: () => void; onClose: () => void; onReload: () => void; onReopen: () => void; refreshKey: number
 }) {
   const [, tick] = useState(0)
+  const [edit, setEdit] = useState<Shift | null>(null)
   useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30000); return () => clearInterval(t) }, [])
   const nameOf = (id: string | null) => team.find(p => p.staffId === id)
   const open = (shifts || []).filter(s => !s.closed)
@@ -96,13 +99,27 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
             <p className="text-[11px] font-bold uppercase tracking-wide mb-1" style={{ color: '#64748B' }}><Users className="inline w-3 h-3 mr-1" />Equipo · cada quien con su horario</p>
             {shifts.map(s => {
               const p = nameOf(s.staffId)
+              const mine = todayCleanings.filter(c => c.startTime && (c.staffIds || []).includes(s.staffId || ''))
+              const sp = s.start ? splitShift(new Date(s.start).getTime(), s.end ? new Date(s.end).getTime() : Date.now(), mine.map(c => ({ s: new Date(c.startTime as string).getTime(), e: c.endTime ? new Date(c.endTime).getTime() : Date.now() }))) : null
               return (
-                <div key={s.id} className="flex items-center gap-3 py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
-                  <Av ini={p?.initials || '??'} />
-                  <span className="flex-1 font-bold text-[14px]" style={{ color: '#0F172A' }}>{p?.name || s.label || 'Persona'}</span>
-                  <span className="text-[12px] font-bold px-2 py-1 rounded-lg" style={{ background: '#F1F5F9' }}>{fmtTime(s.start)}</span>
-                  <span style={{ color: '#94A3B8' }}>→</span>
-                  <span className="text-[12px] font-bold px-2 py-1 rounded-lg" style={{ background: '#F1F5F9' }}>{s.end ? fmtTime(s.end) : 'en turno'}</span>
+                <div key={s.id} className="py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
+                  <div className="flex items-center gap-3">
+                    <Av ini={p?.initials || '??'} />
+                    <span className="flex-1 font-bold text-[14px]" style={{ color: '#0F172A' }}>{p?.name || s.label || 'Persona'}</span>
+                    <span className="text-[12px] font-bold px-2 py-1 rounded-lg" style={{ background: '#F1F5F9' }}>{fmtTime(s.start)}</span>
+                    <span style={{ color: '#94A3B8' }}>→</span>
+                    <span className="text-[12px] font-bold px-2 py-1 rounded-lg" style={{ background: s.end ? '#F1F5F9' : '#E8F8EF', color: s.end ? '#0F172A' : '#15803D' }}>{s.end ? fmtTime(s.end) : 'en turno'}</span>
+                  </div>
+                  {sp && (
+                    <p className="text-[11px] mt-1 ml-[46px]" style={{ color: '#64748B' }}>
+                      <b style={{ color: '#0F172A' }}>{fmtH(sp.total)}</b> · 🧹 {fmtH(sp.clean)} limpiando · 🚐 {fmtH(sp.travel)} traslado · ⏸ {fmtH(sp.dead)} muerto
+                    </p>
+                  )}
+                  <div className="ml-[46px] mt-1.5">
+                    {s.closed
+                      ? <button onClick={() => setEdit(s)} className="text-[12px] font-bold px-3 py-1 rounded-lg" style={{ border: '1.5px solid #CBD5E1', color: '#475569' }}>🔒 Terminó · corregir / reabrir</button>
+                      : <button onClick={() => setEdit(s)} className="text-[12px] font-bold px-3 py-1 rounded-lg" style={{ border: '1.5px solid #FCA5A5', color: '#B91C1C' }}>Terminó su turno</button>}
+                  </div>
                 </div>
               )
             })}
@@ -116,6 +133,8 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
           </div>
         </>
       )}
+
+      {edit && <PersonShiftSheet shift={edit} person={nameOf(edit.staffId)} date={date} by={by} onClose={() => setEdit(null)} onDone={(m) => { setEdit(null); onToast(m); onReload() }} onError={m => onToast(m, 'err')} />}
 
       {/* Lista de todo lo asignado (maletas, kits, herramientas) + escáner de carga */}
       <AssignedLoad cleanings={todayCleanings} refreshKey={refreshKey} onScan={onScanLoad} />
@@ -201,6 +220,46 @@ export function CloseShiftPage({ date, shifts, team, inProgress, closedBy, onBac
               </div>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ── Terminar / corregir / reabrir el turno de UNA persona ──
+function PersonShiftSheet({ shift, person, date, by, onClose, onDone, onError }: { shift: Shift; person?: Person; date: string; by: string; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const [start, setStart] = useState(toInput(shift.start))
+  const [end, setEnd] = useState(toInput(shift.end))
+  const [busy, setBusy] = useState(false)
+  const bad = new Date(fromInput(date, end)) < new Date(fromInput(date, start))
+  const run = async (fn: () => Promise<{ ok: boolean } | { ok: false; error: string } | any>, msg: string) => {
+    setBusy(true)
+    const r = await fn()
+    setBusy(false)
+    if (r.ok) onDone(msg); else onError(`No se pudo: ${r.error}`)
+  }
+  const name = person?.name || shift.label || 'Persona'
+  return (
+    <div className="fixed inset-0 z-[80] flex flex-col justify-end" style={{ background: 'rgba(15,23,42,0.5)' }}>
+      <div className="rounded-t-[24px] px-4 pt-3 pb-6" style={{ background: '#fff', fontFamily: 'Poppins, sans-serif' }}>
+        <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: '#CBD5E1' }} />
+        <p className="font-black text-[16px]" style={{ color: '#0F172A' }}>{shift.closed ? `Turno de ${name}` : `${name} terminó su turno`}</p>
+        <p className="text-[12px] mb-3" style={{ color: '#64748B' }}>{shift.closed ? 'Está bloqueado. Corrige la hora o reábrelo si fue un error.' : 'Confirma la hora de salida.'}</p>
+        <div className="flex items-center gap-2">
+          <input type="time" value={start} onChange={e => setStart(e.target.value)} className="flex-1 min-w-0 rounded-lg px-2 py-2 text-[14px] font-bold" style={{ background: '#F1F5F9' }} />
+          <span style={{ color: '#94A3B8' }}>→</span>
+          <input type="time" value={end} onChange={e => setEnd(e.target.value)} className="flex-1 min-w-0 rounded-lg px-2 py-2 text-[14px] font-bold" style={{ background: '#F1F5F9' }} />
+        </div>
+        {bad && <p className="text-[12px] font-semibold mt-2" style={{ color: '#B91C1C' }}>La salida es antes de la entrada.</p>}
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-[13px]" style={{ border: '1.5px solid #E2E8F0', color: '#475569' }}>Cancelar</button>
+          {!shift.closed
+            ? <button disabled={busy || bad} onClick={() => run(() => closeShifts([{ id: shift.id, start: fromInput(date, start), end: fromInput(date, end), notes: shift.notes || '' }], by), `${name}: turno terminado ✓`)} className="flex-[1.6] py-3 rounded-xl font-bold text-[13px] text-white" style={{ background: '#DC2626', opacity: busy || bad ? 0.5 : 1 }}>{busy ? 'Guardando…' : 'Terminar turno'}</button>
+            : <>
+              <button disabled={busy || bad} onClick={() => run(() => updateShift(shift.id, fromInput(date, start), fromInput(date, end)), 'Hora corregida ✓')} className="flex-1 py-3 rounded-xl font-bold text-[13px] text-white" style={{ background: TEAL, opacity: busy || bad ? 0.5 : 1 }}>Guardar hora</button>
+              <button disabled={busy} onClick={() => run(() => reopenShifts([shift], by), `${name}: turno reabierto ✓`)} className="flex-1 py-3 rounded-xl font-bold text-[13px]" style={{ border: '1.5px solid #CBD5E1', color: '#475569' }}>Reabrir</button>
+            </>}
         </div>
       </div>
     </div>

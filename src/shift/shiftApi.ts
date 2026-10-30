@@ -17,6 +17,7 @@ export const getShifts = (date: string) => call<{ shifts: Shift[] }>({ method: '
 export const startShifts = (date: string, people: { staffId: string; name: string; initials: string; start: string }[], registeredBy: string) =>
   post<{ shifts: Shift[] }>({ action: 'start', date, people, registeredBy })
 export const reopenShifts = (shifts: Shift[], by: string) => post<{ ok: boolean }>({ action: 'reopen', ids: shifts.map(x => x.id), by, notes: Object.fromEntries(shifts.map(x => [x.id, x.notes || ''])) })
+export const updateShift = (id: string, start: string, end: string) => post<{ ok: boolean }>({ action: 'update', id, start, end })
 export const closeShifts = (rows: { id: string; start: string; end: string; notes?: string }[], by: string) => post<{ ok: boolean }>({ action: 'close', rows, by })
 // Ultima linea "Cerrado por X · ..." de la bitacora (para mostrar quien cerro)
 export const lastClosedBy = (shifts: Shift[]) => { for (const s of shifts) { const m = [...String(s.notes || '').matchAll(/Cerrado por (.+?) · ([^\n]+)/g)].pop(); if (m) return `${m[1]} · ${m[2]}` } return '' }
