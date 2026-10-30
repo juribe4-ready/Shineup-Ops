@@ -248,7 +248,7 @@ export default function App() {
     return m.charAt(0).toUpperCase() + m.slice(1)
   })()
   const pickDate = (iso: string) => { setSelectedDate(iso); setStatusFilter(''); loadCleanings(iso) }
-  const STATUS_ORDER = ['Programmed', 'Opened', 'In Progress', 'Done'] as const
+  const STATUS_ORDER = ['Done', 'In Progress', 'Opened', 'Programmed'] as const
   const countOf: Record<string, number> = { Programmed: stats.programmed, Opened: stats.opened, 'In Progress': stats.inProgress, Done: stats.done }
   const summaryLabel = isToday ? `Hoy · ${todayLabel.toLowerCase()}` : todayLabel
 
@@ -317,9 +317,15 @@ export default function App() {
           {/* Resumen del dia: barra + pills de estado (filtran) */}
           {!loadingData && !error && cleanings.length > 0 && (
             <div className="rounded-2xl bg-white p-3 mt-1 mb-3" style={{ border: '1px solid #E2E8F0' }}>
-              <div className="flex items-baseline gap-2 mb-2">
-                <b className="text-[13px]" style={{ color: '#0F172A' }}>{summaryLabel}</b>
-                <span className="text-[11.5px]" style={{ color: '#64748B' }}>{stats.done} de {stats.total} terminadas · {stats.percent}%</span>
+              <div className="flex items-end gap-3 mb-2.5">
+                <div className="leading-none">
+                  <span className="font-black text-[34px]" style={{ color: '#0F172A' }}>{stats.total}</span>
+                  <span className="text-[13px] font-bold ml-1.5" style={{ color: '#475569' }}>{stats.total === 1 ? 'casa' : 'casas'} {isToday ? 'hoy' : 'ese día'}</span>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-[12px] font-bold" style={{ color: '#0F172A' }}>{stats.done} terminadas · {stats.percent}%</p>
+                  <p className="text-[10.5px]" style={{ color: '#94A3B8' }}>{summaryLabel}</p>
+                </div>
               </div>
               <div className="flex overflow-hidden rounded-full mb-2.5" style={{ height: 10, background: '#EEF2F6' }}>
                 {(['Done', 'In Progress', 'Opened', 'Programmed'] as const).map(k => countOf[k] > 0 && (
