@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
       const shift = (n) => { const d = new Date(effectiveDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
       const formula = `OR(IS_SAME({Date},'${shift(-1)}','day'),IS_SAME({Date},'${effectiveDate}','day'),IS_SAME({Date},'${shift(1)}','day'))`;
-      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'Cleaning Type Text', 'Cleaning Type'];
+      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'Cleaning Type Text', 'Cleaning Type', 'Property'];
       const q = `&filterByFormula=${encodeURIComponent(formula)}` + FIELDS.map(f => `&fields[]=${encodeURIComponent(f)}`).join('');
       try {
         const fast = await fetchAll(q);
@@ -108,6 +108,8 @@ export default async function handler(req, res) {
       const ctRaw = f['Cleaning Type Text'] ?? f['Cleaning Type'];
       let cleaningType = Array.isArray(ctRaw) ? String(ctRaw[0] || '') : (typeof ctRaw === 'string' ? ctRaw : '');
       if (/^rec[A-Za-z0-9]{14}$/.test(cleaningType)) cleaningType = '';
+      const propArr = f['Property'];
+      const propertyId = Array.isArray(propArr) && typeof propArr[0] === 'string' ? propArr[0] : null;
       return {
         id: record.id,
         propertyText: f['Property Text'] || 'Propiedad sin nombre',
@@ -115,7 +117,7 @@ export default async function handler(req, res) {
         date: rawDate || null, formattedDate,
         scheduledTime: f['Scheduled Time'] || null,
         notes: f['OpenComments'] || '',
-        staffList, staffIds: assignedStaffIds, staffNames, equipmentCount, attachments, cleaningType,
+        staffList, staffIds: assignedStaffIds, staffNames, equipmentCount, attachments, cleaningType, propertyId,
       };
     });
 

@@ -3,6 +3,7 @@
 //   POST /api/shifts {action:'start',  date, people:[{staffId,name,initials,start}], registeredBy}
 //   POST /api/shifts {action:'update', id, start?, end?}  -> corrige horas de una fila
 //   POST /api/shifts {action:'close',  rows:[{id,start,end}]}  -> fija horas y marca Cerrado
+//   POST /api/shifts {action:'reopen', ids:[...]}          -> quita Cerrado y Fin (por si se cerro por error)
 // Campos de Airtable: Turno, Fecha, Persona (link a Staff), Inicio, Fin, "Registrado por", Cerrado, Notas
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
@@ -87,6 +88,16 @@ export default async function handler(req, res) {
       for (const x of valid) if (new Date(x.end) < new Date(x.start)) return res.status(400).json({ error: 'El fin es antes del inicio' });
       for (let i = 0; i < valid.length; i += 10) {
         const chunk = valid.slice(i, i + 10).map(x => ({ id: x.id, fields: { 'Inicio': new Date(x.start).toISOString(), 'Fin': new Date(x.end).toISOString(), 'Cerrado': true } }));
+        const r = await fetch(URL_BASE, { method: 'PATCH', headers: H, body: JSON.stringify({ records: chunk }) });
+        if (!r.ok) throw new Error(`Airtable ${r.status}: ${(await r.text()).slice(0, 300)}`);
+      }
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'reopen') {
+      const { ids } = body;
+      if (!Array.isArray(ids) || !ids.length || !ids.every(i => /^rec[A-Za-z0-9]{14}$/.test(i || ''))) return res.status(400).json({ error: 'ids invalidos' });
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10).map(id => ({ id, fields: { 'Cerrado': false, 'Fin': null } }));
         const r = await fetch(URL_BASE, { method: 'PATCH', headers: H, body: JSON.stringify({ records: chunk }) });
         if (!r.ok) throw new Error(`Airtable ${r.status}: ${(await r.text()).slice(0, 300)}`);
       }
