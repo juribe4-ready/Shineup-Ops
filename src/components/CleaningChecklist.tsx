@@ -59,6 +59,7 @@ interface Props {
   cleaning: { id: string; propertyText?: string }
   onBack: () => void
   staffId?: string
+  shiftClosed?: boolean
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -233,7 +234,7 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVsLgwP3bZuih' }: Props) {
+export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVsLgwP3bZuih', shiftClosed = true }: Props) {
   const [details, setDetails]               = useState<CleaningDetails | null>(null)
   const [tasks, setTasks]                   = useState<Task[]>([])
   const [loading, setLoading]               = useState(true)
@@ -399,6 +400,10 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
     } catch { showToast('Error al iniciar', 'err') }
     finally { setStartingCleaning(false) }
   }
+
+  // Terminada pero el turno sigue abierto: se pueden seguir subiendo fotos/registros. Se bloquea al cerrar el turno.
+  const editable = isInProgress || (isDone && !shiftClosed)
+  const locked = isDone && shiftClosed
 
   const handleFinish = async () => {
     // Laundry: antes de cerrar, el cleaner declara qué deja sucio (si no hay maletas, pasa directo)
@@ -641,7 +646,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
         </div>
 
         {/* ── INICIO ──────────────────────────────────── */}
-        <div ref={inicioRef} style={{ opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
+        <div ref={inicioRef} style={{ opacity: locked ? 0.5 : 1, pointerEvents: locked ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
           <SectionLabel>Inicio</SectionLabel>
           <div className="rounded-2xl overflow-hidden space-y-0" style={{ background: C.white, border: `1px solid ${C.border}` }}>
 
@@ -798,7 +803,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
               <div className="relative rounded-2xl overflow-hidden" style={{ height: '140px' }}>
                 <img src={storagePhoto} alt="almacén" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 flex items-end p-2 justify-end" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.3), transparent)' }}>
-                  <button onClick={() => isInProgress && storageInputRef.current?.click()}
+                  <button onClick={() => editable && storageInputRef.current?.click()}
                     className="text-[10px] font-bold px-2.5 py-1 rounded-xl text-white"
                     style={{ background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)' }}>
                     Cambiar foto
@@ -817,10 +822,10 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                     </div>
                   </div>
                 )}
-                <button onClick={() => isInProgress && !uploadingStorage && storageInputRef.current?.click()}
-                  disabled={!isInProgress || uploadingStorage}
+                <button onClick={() => editable && !uploadingStorage && storageInputRef.current?.click()}
+                  disabled={!editable || uploadingStorage}
                   className="w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-                  style={{ borderColor: isInProgress ? C.teal : C.border, color: isInProgress ? C.teal : C.muted }}>
+                  style={{ borderColor: editable ? C.teal : C.border, color: editable ? C.teal : C.muted }}>
                   <Camera className="w-4 h-4" />
                   {uploadingStorage ? `Subiendo ${storageProgress}%...` : 'Subir foto del almacén'}
                 </button>
@@ -836,13 +841,13 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 <p className="font-black text-[14px]" style={{ color: C.ink }}>Rupturas de inventario</p>
                 <p className="text-[11px] font-medium" style={{ color: C.muted }}>Artículos bajos o agotados</p>
               </div>
-              <button onClick={() => isInProgress && setShowNewInventory(true)} disabled={!isInProgress}
+              <button onClick={() => editable && setShowNewInventory(true)} disabled={!editable}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-white text-[12px] font-bold active:scale-95 transition-all"
-                style={{ background: isInProgress ? C.teal : C.muted }}>
+                style={{ background: editable ? C.teal : C.muted }}>
                 <Plus className="w-3.5 h-3.5" /> Nuevo
               </button>
             </div>
-            <div style={{ opacity: isInProgress ? 1 : 0.5 }}>
+            <div style={{ opacity: editable ? 1 : 0.5 }}>
               {inventoryRecords.length === 0 ? (
                 <div className="flex flex-col items-center py-10 gap-2" style={{ color: C.muted }}>
                   <Package className="w-8 h-8 opacity-30" />
@@ -869,7 +874,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 </div>
               )}
             </div>
-            {!isInProgress && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para registrar</p>}
+            {!editable && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para registrar</p>}
           </div>
 
           {/* Incidentes */}
@@ -879,13 +884,13 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 <p className="font-black text-[14px]" style={{ color: C.ink }}>Incidentes</p>
                 <p className="text-[11px] font-medium" style={{ color: C.muted }}>Reporta problemas o daños</p>
               </div>
-              <button onClick={() => isInProgress && setShowNewIncident(true)} disabled={!isInProgress}
+              <button onClick={() => editable && setShowNewIncident(true)} disabled={!editable}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-white text-[12px] font-bold active:scale-95 transition-all"
-                style={{ background: isInProgress ? C.teal : C.muted }}>
+                style={{ background: editable ? C.teal : C.muted }}>
                 <Plus className="w-3.5 h-3.5" /> Nuevo
               </button>
             </div>
-            <div style={{ opacity: isInProgress ? 1 : 0.5 }}>
+            <div style={{ opacity: editable ? 1 : 0.5 }}>
               {incidents.length === 0 ? (
                 <div className="flex flex-col items-center py-10 gap-2" style={{ color: C.muted }}>
                   <AlertCircle className="w-8 h-8 opacity-30" />
@@ -915,15 +920,15 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 </div>
               )}
             </div>
-            {!isInProgress && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para interactuar</p>}
+            {!editable && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para interactuar</p>}
           </div>
         </div>
 
         {/* ── LAUNDRY: maletas de la propiedad ────────── */}
-        <BagsPanel ref={bagsRef} cleaningId={cleaning.id} propertyId={details?.propertyId} isInProgress={isInProgress} onToast={showToast} />
+        <BagsPanel ref={bagsRef} cleaningId={cleaning.id} propertyId={details?.propertyId} isInProgress={editable} onToast={showToast} />
 
         {/* ── CIERRE ──────────────────────────────────── */}
-        <div ref={cierreRef} style={{ opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
+        <div ref={cierreRef} style={{ opacity: locked ? 0.5 : 1, pointerEvents: locked ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
           <SectionLabel>Cierre</SectionLabel>
           <div className="rounded-2xl overflow-hidden p-5 space-y-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <p className="font-semibold text-[14px] leading-relaxed" style={{ color: C.slate }}>
@@ -963,10 +968,10 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
               </div>
             )}
             <input ref={closingInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleClosingUpload} />
-            <button onClick={() => isInProgress && !isDone && !uploadingClosing && closingInputRef.current?.click()}
-              disabled={!isInProgress || uploadingClosing || isDone}
+            <button onClick={() => editable && !uploadingClosing && closingInputRef.current?.click()}
+              disabled={!editable || uploadingClosing}
               className="w-full py-3.5 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
-              style={{ borderColor: isInProgress ? C.slate : C.border, color: isInProgress ? C.slate : C.muted, opacity: uploadingClosing ? 0.6 : 1 }}>
+              style={{ borderColor: editable ? C.slate : C.border, color: editable ? C.slate : C.muted, opacity: uploadingClosing ? 0.6 : 1 }}>
               <Camera className="w-4 h-4" />
               {uploadingClosing ? `Subiendo ${closingProgress}%...` :
                 details?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos de Cierre' :
