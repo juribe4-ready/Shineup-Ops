@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { lGet, LAUNDRY_ENABLED } from './api'
+import { lGet, lPost, LAUNDRY_ENABLED } from './api'
 import { submit } from './outbox'
 import { Big, BlobPhotos, Counter, L, Modal } from './ui'
 
@@ -25,6 +25,7 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
   const [data, setData] = useState<Payload | null>(null)
   const [declare, setDeclare] = useState<PBag[] | null>(null)
   const resolver = useRef<((ok: boolean) => void) | null>(null)
+  const [undoing, setUndoing] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!LAUNDRY_ENABLED || !propertyId) return
@@ -58,13 +59,36 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
         <p className="font-black text-[14px]" style={{ color: L.ink }}>🧺 Maletas de esta casa</p>
         {data.bags.map(b => {
           const declared = b.declaredForThisCleaning || flag(doneKey(cleaningId, b.id))
-          const loaded = b.state === 'In Use'
+          const n = Math.max(1, b.qty)
+          const inUse = b.cycle?.state === 'In Use'
+          const out = b.cycle?.unitsOut || []
+          const anyLoaded = inUse && !declared
           return (
-            <div key={b.id} className="flex items-center justify-between rounded-2xl px-3 py-2.5" style={{ background: '#F8FAFC', border: `1px solid ${L.border}` }}>
-              <p className="font-bold text-[13px]" style={{ color: L.ink }}>{b.code || b.name}{b.qty > 1 ? ` · ${b.qty} maletas` : ''}</p>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: declared ? '#DCFCE7' : loaded ? '#E0F2FE' : '#FEF3C7', color: declared ? '#15803D' : loaded ? '#0369A1' : '#92400E' }}>
-                {declared ? 'Devuelta ✓' : loaded ? 'Contigo' : 'No cargada'}
-              </span>
+            <div key={b.id} className="rounded-2xl px-3 py-2.5" style={{ background: '#F8FAFC', border: `1px solid ${L.border}` }}>
+              <p className="font-bold text-[13px]" style={{ color: L.ink }}>{b.name}{n > 1 ? ` · ${n} maletas` : ''}</p>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {Array.from({ length: n }, (_, i) => i + 1).map(u => {
+                  const loaded = inUse && (!out.length || out.includes(u))
+                  const st = declared ? 'Devuelta ✓' : loaded ? 'Contigo' : 'No cargada'
+                  const bg = declared ? '#DCFCE7' : loaded ? '#E0F2FE' : '#FEF3C7'
+                  const fg = declared ? '#15803D' : loaded ? '#0369A1' : '#92400E'
+                  return (
+                    <span key={u} className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: bg, color: fg }}>
+                      {n > 1 ? `Maleta ${u}` : (b.code || 'Maleta')} · {st}
+                    </span>
+                  )
+                })}
+              </div>
+              {anyLoaded && (
+                <button disabled={undoing === b.id} onClick={async () => {
+                  if (!window.confirm(`¿Descargar ${b.name}? Se deshace la carga de ${n > 1 ? 'sus ' + n + ' maletas' : 'la maleta'} y podrás cargarla de nuevo.`)) return
+                  setUndoing(b.id)
+                  try { await lPost('undoLoad', { bagId: b.id }); onToast('Maletas descargadas ✓ — puedes volver a cargarlas'); await load() }
+                  catch (e: any) { onToast(e.message || 'No se pudo descargar', 'err') } finally { setUndoing(null) }
+                }} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'white', color: L.red, border: `1.5px solid ${L.border}` }}>
+                  ↩ Descargar y volver a cargar
+                </button>
+              )}
             </div>
           )
         })}
