@@ -30,6 +30,8 @@ interface Cleaning {
   attachments?: Array<{ url: string }>
   cleaningType?: string
   staffIds?: string[]
+  startTime?: string | null
+  endTime?: string | null
   staffNames?: string[]
 }
 
@@ -399,6 +401,7 @@ export default function App() {
 
         {tab === 'turno' && (
           <ShiftTab
+            by={profile?.full_name || profile?.email || ''} onToast={laundryToast}
             date={todayStr} shifts={shifts} shiftsError={shiftsError} team={team} todayCleanings={todayCleanings}
             missing={missingTeam}
             onStart={() => setRollCall({ cleaning: null })}
