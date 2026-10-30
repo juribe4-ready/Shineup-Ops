@@ -5,6 +5,9 @@ import CleaningChecklist from './components/CleaningChecklist'
 import LoginPage from './LoginPage'
 import { useAuth } from './AuthContext'
 import { usePushNotifications } from './usePushNotifications'
+import LaundryTools from './laundry/LaundryTools'
+import { LAUNDRY_ENABLED } from './laundry/api'
+import { startOutbox } from './laundry/outbox'
 
 const TEAL      = '#00BCD4'
 const TEAL_DARK = '#0097A7'
@@ -38,6 +41,11 @@ export default function App() {
   const [currentTime, setCurrentTime]       = useState(
     new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
   )
+
+  // Laundry: reenvía lo que quedó pendiente por falta de señal (también mientras se está en un checklist)
+  const [lToast, setLToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  useEffect(() => { if (LAUNDRY_ENABLED && user) return startOutbox() }, [user])
+  const laundryToast = (msg: string, type: 'ok' | 'err' = 'ok') => { setLToast({ msg, type }); setTimeout(() => setLToast(null), 3500) }
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -225,7 +233,9 @@ export default function App() {
         </div>
       </header>
 
+      {lToast && <div className="fixed left-1/2 -translate-x-1/2 top-4 z-[90] px-5 py-3 rounded-2xl text-white text-[13px] font-bold shadow-xl max-w-[90vw] text-center" style={{ background: lToast.type === 'err' ? '#EF4444' : '#0F172A' }}>{lToast.msg}</div>}
       <div className="px-5 pt-7 mx-auto w-full">
+        <LaundryTools onToast={laundryToast} />
         <div className="flex justify-between items-center mb-5">
           <div>
             <h3 className="text-base font-bold text-slate-900 tracking-tight leading-none">Mis Tareas</h3>
