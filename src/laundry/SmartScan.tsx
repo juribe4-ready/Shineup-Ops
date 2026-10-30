@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { lGet } from './api'
 import { submit } from './outbox'
 import Scanner from './Scanner'
 import { Big, L, Modal } from './ui'
-import { findEquipment, setChecked } from '../shift/loadStore'
+import { findEquipment, setChecked, getChecked, getEquipment, getUnits, markUnitLoaded, subscribeLoad, unitIsLoaded } from '../shift/loadStore'
 
 interface Cl { id: string; propertyId?: string | null; propertyText?: string; status?: string }
 type Card = { kind: 'bag'; code: string; info: any } | { kind: 'equip'; text: string; code: string }
@@ -21,20 +21,24 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [manual, setManual] = useState('')
+  const [, bump] = useState(0)
+  useEffect(() => subscribeLoad(() => bump(n => n + 1)), [])
   const push = (code: string, msg: string, ok = true) => setLog(l => [{ code, msg, ok }, ...l].slice(0, 8))
 
   const stateOf = (info: any): string | null => info?.cycle?.state || info?.bag?.state || null
 
-  async function loadBag(code: string) {
+  async function loadBag(codeIn: string | string[]) {
+    const codes = Array.isArray(codeIn) ? codeIn : [codeIn]
+    const code = codes.join(' + ')
     setBusy(true)
     try {
-      const r = await submit<{ loaded: { code: string; warning: string | null }[]; unknown: string[] }>('loadShift', { codes: [code] })
+      const r = await submit<{ loaded: { code: string; warning: string | null }[]; unknown: string[] }>('loadShift', { codes })
       if (r.status === 'queued') { push(code, 'Sin señal: se enviará sola'); onToast('Sin señal: la carga se enviará sola') }
       else {
         const w = r.data.loaded.find(x => x.warning)?.warning
         if (r.data.unknown.length) { push(code, 'Código desconocido', false); onToast(`No conozco el código ${code}`, 'err') }
         else if (w) { push(code, w, false); onToast(`⚠ ${code}: ${w}`, 'err') }
-        else { push(code, 'Cargada al transporte ✓'); onToast(`${code} cargada ✓`) }
+        else { push(code, 'Cargada al transporte ✓'); onToast(`${code} cargada ✓`); codes.forEach(markUnitLoaded) }
       }
       onChanged(); setCard(null)
     } catch (e: any) { setErr(e.message); onToast(e.message, 'err') } finally { setBusy(false) }
@@ -73,9 +77,11 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
       const info = await lGet<any>('bag', { code })
       if (mode === 'load') {
         const st = stateOf(info)
-        if (st === 'In Use') push(code, 'Ya estaba cargada')
-        else if (st && st !== 'Clean') { push(code, `Estado ${st}: todavía no está lista`, false); onToast(`${code}: estado ${st}, no está lista`, 'err') }
-        else await loadBag(code)
+        const mine = getUnits().find(u => u.code.toUpperCase() === code)
+        const already = mine ? mine.loaded : (st === 'In Use' && unitIsLoaded(info.cycle, info.unit || 1))
+        if (already) { push(code, 'Ya estaba cargada'); onToast(`${code} ya estaba cargada`) }
+        else if (st && st !== 'Clean' && st !== 'In Use') { push(code, `Estado ${st}: todavía no está lista`, false); onToast(`${code}: estado ${st}, no está lista`, 'err') }
+        else setCard({ kind: 'bag', code, info }) // confirmar antes de cargar
       } else setCard({ kind: 'bag', code, info })
     } catch (e: any) { setErr(e.message) }
   }
@@ -91,23 +97,37 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
       : { t: `${st || 'Sin estado'}`, bg: '#F1F5F9', fg: '#475569' }
     return (
       <div className="rounded-2xl p-4" style={{ background: '#fff', border: `1.5px solid ${TEAL}` }}>
-        <p className="text-[11px]" style={{ color: L.slate }}>Maleta{houses ? ` · ${houses}` : ''}{info.unit ? ` · unidad ${info.unit}` : ''}</p>
+        {mode === 'load' && <p className="text-[11px] font-bold uppercase tracking-wide mb-1" style={{ color: TEAL }}>Confirma la maleta</p>}
+        <p className="text-[11px]" style={{ color: L.slate }}>Maleta{houses ? ` · ${houses}` : ''}{info.unit ? ` · maleta ${info.unit} de ${info.bag.qty || 1}` : ''}</p>
         <p className="font-black text-[17px]" style={{ color: L.ink }}>{info.bag.code || info.bag.name}</p>
         <p className="text-[11px] font-semibold mt-2" style={{ color: L.slate }}>{useFinal ? 'Contenido (lo que dejó lavandería)' : 'Total de la casa (regresa sucio por defecto)'}</p>
         <div>{Object.entries(counts).map(([k, v]) => (
           <div key={k} className="flex justify-between text-[13px] py-1" style={{ borderTop: '1px solid #F1F5F9' }}><span>{k}</span><b>{v}</b></div>
         ))}{!Object.keys(counts).length && <p className="text-[12px]" style={{ color: L.muted }}>Esta maleta no tiene contenido definido.</p>}</div>
         <div className="mt-3 rounded-xl px-3 py-2.5 text-[13px] font-bold" style={{ background: chip.bg, color: chip.fg }}>● {chip.t}</div>
+        {mode === 'load' && getUnits().length > 0 && !getUnits().some(u => u.code.toUpperCase() === c.code) && (
+          <div className="mt-2 rounded-xl px-3 py-2 text-[12px] font-bold" style={{ background: '#FEE2E2', color: '#B91C1C' }}>⚠ Esta maleta no es de tus casas de hoy. ¿Seguro que la cargas?</div>
+        )}
         {pick && (
           <div className="mt-3">
             <p className="text-[12px] font-semibold mb-1" style={{ color: L.slate }}>¿De cuál casa sale?</p>
             {pick.map(p => <button key={p.id} disabled={busy} onClick={() => markDirty(info, p)} className="w-full text-left py-2.5 px-3 mb-1.5 rounded-xl font-bold text-[13px]" style={{ border: `1.5px solid ${L.border}`, color: L.ink }}>{p.propertyText}</button>)}
           </div>
         )}
+        {mode === 'load' && (() => {
+          const rest = getUnits().filter(u => u.bagId === info.bag.id && !u.loaded && u.code.toUpperCase() !== c.code)
+          return rest.length > 0 ? (
+            <div className="mt-3"><Big ghost color={TEAL} disabled={busy} onClick={() => loadBag([c.code, ...rest.map(u => u.code)])}>Cargar las {rest.length + 1} maletas de la casa</Big></div>
+          ) : null
+        })()}
         <div className="flex gap-2 mt-3">
           <div className="flex-1"><Big ghost color={L.slate} onClick={() => { setCard(null); setPick(null) }}>Cancelar</Big></div>
-          {(st === 'Clean' || !st) && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Cargar al transporte</Big></div>}
-          {st === 'In Use' && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => startMarkDirty(info)}>Marcar sucia</Big></div>}
+          {mode === 'load'
+            ? <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Confirmar y cargar esta</Big></div>
+            : <>
+              {(st === 'Clean' || !st) && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Cargar al transporte</Big></div>}
+              {st === 'In Use' && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => startMarkDirty(info)}>Marcar sucia</Big></div>}
+            </>}
         </div>
       </div>
     )
@@ -115,7 +135,26 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
 
   return (
     <Modal title={mode === 'load' ? 'Cargar transporte' : 'Escanear'} onClose={onClose}>
-      {mode === 'load' && <p className="text-[12px]" style={{ color: L.slate }}>Cada maleta, kit o herramienta que escanees se carga directo.</p>}
+      {mode === 'load' && (() => {
+        const us = getUnits(), eq = getEquipment(), ck = getChecked()
+        const missU = us.filter(u => !u.loaded), missE = eq.filter(e => !ck.has(e.code.toUpperCase()))
+        const total = us.length + eq.length, done = total - missU.length - missE.length
+        return (
+          <div className="rounded-2xl p-3" style={{ background: '#fff', border: `1px solid ${L.border}` }}>
+            <div className="flex items-baseline justify-between">
+              <p className="font-black text-[15px]" style={{ color: done === total && total > 0 ? '#15803D' : L.ink }}>Cargado {done} de {total}</p>
+              <p className="text-[11px]" style={{ color: L.slate }}>maletas {us.length - missU.length}/{us.length} · kits {eq.length - missE.length}/{eq.length}</p>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden mt-1.5" style={{ background: '#E2E8F0' }}><div className="h-full rounded-full transition-all" style={{ width: `${total ? (done / total) * 100 : 0}%`, background: done === total && total > 0 ? '#16A34A' : TEAL }} /></div>
+            {(missU.length + missE.length) > 0
+              ? <div className="mt-2"><p className="text-[11px] font-bold" style={{ color: '#92400E' }}>Faltan {missU.length + missE.length}:</p>
+                  <p className="text-[11px]" style={{ color: L.slate }}>{[...missU.map(u => `${u.code} (${u.house})`), ...missE.map(e => e.text)].slice(0, 8).join(' · ')}{missU.length + missE.length > 8 ? ' …' : ''}</p></div>
+              : total > 0 && <p className="text-[12px] font-bold mt-1.5" style={{ color: '#15803D' }}>✓ Todo cargado</p>}
+          </div>
+        )
+      })()}
+      {mode === 'load' && <p className="text-[12px]" style={{ color: L.slate }}>Escanea cada maleta: te pedirá confirmar. Los kits y herramientas se marcan al escanearlos.</p>}
+      {card?.kind === 'bag' && bagCard(card)}
       <Scanner onCode={handle} paused={!!card || busy} />
       <div className="flex gap-2">
         <input value={manual} onChange={e => setManual(e.target.value)} placeholder="¿No lee? Escribe el código…" onKeyDown={e => { if (e.key === 'Enter') { handle(manual); setManual('') } }}
@@ -123,7 +162,6 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
         <button onClick={() => { handle(manual); setManual('') }} className="px-4 rounded-xl font-bold text-[13px] text-white" style={{ background: TEAL }}>Agregar</button>
       </div>
       {err && <p className="text-[12px] font-semibold" style={{ color: L.red }}>{err}</p>}
-      {card?.kind === 'bag' && bagCard(card)}
       {card?.kind === 'equip' && (
         <div className="rounded-2xl p-4" style={{ background: '#fff', border: `1.5px solid #7C3AED` }}>
           <p className="text-[11px]" style={{ color: L.slate }}>Kit / herramienta</p>
