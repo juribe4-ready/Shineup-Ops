@@ -3,11 +3,12 @@ import { ScanLine, PackagePlus, CloudOff } from 'lucide-react'
 import { LAUNDRY_ENABLED, lGet } from './api'
 import { flush, pendingCount, subscribeOutbox, submit } from './outbox'
 import Scanner from './Scanner'
+import SmartScan from './SmartScan'
 import { Big, L, Modal } from './ui'
 
 // Botones globales en la pantalla de inicio de Ops: escanear una maleta y cargar el turno.
-export default function LaundryTools({ onToast, forceMode, onModeClose, hideButtons }: { onToast: (m: string, t?: 'ok' | 'err') => void; forceMode?: null | 'scan' | 'shift'; onModeClose?: () => void; hideButtons?: boolean }) {
-  const [localMode, setMode] = useState<null | 'scan' | 'shift'>(null)
+export default function LaundryTools({ onToast, forceMode, onModeClose, hideButtons, cleanings = [], onChanged }: { onToast: (m: string, t?: 'ok' | 'err') => void; forceMode?: null | 'scan' | 'shift' | 'load'; onModeClose?: () => void; hideButtons?: boolean; cleanings?: any[]; onChanged?: () => void }) {
+  const [localMode, setMode] = useState<null | 'scan' | 'shift' | 'load'>(null)
   // Los botones internos o una orden desde fuera (pestañas de la app) abren el mismo escáner
   const mode = forceMode ?? localMode
   const closeMode = () => { setMode(null); onModeClose?.() }
@@ -31,7 +32,8 @@ export default function LaundryTools({ onToast, forceMode, onModeClose, hideButt
           <CloudOff className="w-4 h-4" /> {pending} pendiente(s) por enviar · toca para reintentar
         </button>
       )}
-      {mode === 'scan' && <ScanOne onClose={closeMode} />}
+      {mode === 'scan' && <SmartScan mode="ask" cleanings={cleanings} onClose={closeMode} onToast={onToast} onChanged={() => onChanged?.()} />}
+      {mode === 'load' && <SmartScan mode="load" cleanings={cleanings} onClose={closeMode} onToast={onToast} onChanged={() => onChanged?.()} />}
       {mode === 'shift' && <ShiftLoad onClose={closeMode} onToast={onToast} />}
     </>
   )
