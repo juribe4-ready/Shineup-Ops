@@ -15,38 +15,64 @@ export default async function handler(req, res) {
 
     console.log(`[getCleanings] staffId: ${staffId} | date: ${effectiveDate}`);
 
-    let allRecords = [];
-    let offset = null;
+    const hdrs = { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` };
+    const BASE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?pageSize=100&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc`;
 
-    do {
-      const pageUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE}/tblabOdNknnjrYUU1?pageSize=100&sort[0][field]=Scheduled%20Time&sort[0][direction]=asc${offset ? `&offset=${offset}` : ''}`;
-      const airtableRes = await fetch(pageUrl, {
-        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
-      });
-      if (!airtableRes.ok) {
-        const err = await airtableRes.text();
-        return res.status(500).json({ error: 'Error Airtable', detail: err });
-      }
-      const pageData = await airtableRes.json();
-      allRecords = allRecords.concat(pageData.records || []);
-      offset = pageData.offset || null;
-    } while (offset);
-
-    console.log(`[getCleanings] Total: ${allRecords.length}`);
-
-    // Fetch staff initials map
+    // Staff initials (se pide en paralelo con las limpiezas)
     const staffMap = {};
-    try {
-      const staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials`, {
-        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
-      });
-      if (staffRes.ok) {
-        const staffData = await staffRes.json();
-        for (const s of (staffData.records || [])) {
-          staffMap[s.id] = s.fields?.Initials || s.fields?.Name?.substring(0, 2).toUpperCase() || '??';
+    const nameMap = {};
+    const staffPromise = (async () => {
+      try {
+        // Con Name (para el pase de lista); si Airtable lo rechaza, se pide como antes (solo Initials)
+        let staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials&fields[]=Name`, { headers: hdrs });
+        if (!staffRes.ok) staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials`, { headers: hdrs });
+        if (staffRes.ok) {
+          const staffData = await staffRes.json();
+          for (const s of (staffData.records || [])) {
+            staffMap[s.id] = s.fields?.Initials || s.fields?.Name?.substring(0, 2).toUpperCase() || '??';
+            if (s.fields?.Name) nameMap[s.id] = String(s.fields.Name);
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    })();
+
+    // Descarga todas las paginas de una URL. Devuelve null si Airtable responde error.
+    const fetchAll = async (extraQuery) => {
+      let records = [];
+      let offset = null;
+      do {
+        const pageUrl = `${BASE_URL}${extraQuery || ''}${offset ? `&offset=${offset}` : ''}`;
+        const r = await fetch(pageUrl, { headers: hdrs });
+        if (!r.ok) return { error: await r.text() };
+        const pageData = await r.json();
+        records = records.concat(pageData.records || []);
+        offset = pageData.offset || null;
+      } while (offset);
+      return { records };
+    };
+
+    // RAPIDO: solo el dia pedido (+/- 1 dia por zonas horarias; el filtro exacto sigue abajo) y solo los campos que se usan.
+    // Si Airtable rechaza la consulta o no devuelve nada, se hace la lectura completa de siempre (misma logica que antes).
+    let allRecords = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
+      const shift = (n) => { const d = new Date(effectiveDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+      const formula = `OR(IS_SAME({Date},'${shift(-1)}','day'),IS_SAME({Date},'${effectiveDate}','day'),IS_SAME({Date},'${shift(1)}','day'))`;
+      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'Cleaning Type Text', 'Cleaning Type'];
+      const q = `&filterByFormula=${encodeURIComponent(formula)}` + FIELDS.map(f => `&fields[]=${encodeURIComponent(f)}`).join('');
+      try {
+        const fast = await fetchAll(q);
+        if (fast.records && fast.records.length > 0) allRecords = fast.records;
+        else console.log('[getCleanings] consulta rapida sin resultado, se usa lectura completa', fast.error ? String(fast.error).slice(0, 200) : '');
+      } catch (e) { console.log('[getCleanings] consulta rapida fallo', e?.message); }
+    }
+    if (!allRecords) {
+      const full = await fetchAll('');
+      if (full.error) return res.status(500).json({ error: 'Error Airtable', detail: full.error });
+      allRecords = full.records;
+    }
+    await staffPromise;
+
+    console.log(`[getCleanings] Total leidos: ${allRecords.length}`);
 
     const filtered = allRecords.filter(r => {
       const f = r.fields;
@@ -70,6 +96,7 @@ export default async function handler(req, res) {
       const staffListRaw = f['staffList'] || '';
       const assignedStaffIds = Array.isArray(f['Assigned Staff']) ? f['Assigned Staff'] : [];
       const staffList = assignedStaffIds.map(id => staffMap[id] || '??').filter(Boolean);
+      const staffNames = assignedStaffIds.map(id => nameMap[id] || staffMap[id] || '');
       const equipment = f['Equipment'] || [];
       const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
       const rawDate = f['Date'];
@@ -78,6 +105,9 @@ export default async function handler(req, res) {
         const parts = rawDate.split('-');
         formattedDate = `${parseInt(parts[2])} ${MONTHS[parseInt(parts[1]) - 1]}`;
       }
+      const ctRaw = f['Cleaning Type Text'] ?? f['Cleaning Type'];
+      let cleaningType = Array.isArray(ctRaw) ? String(ctRaw[0] || '') : (typeof ctRaw === 'string' ? ctRaw : '');
+      if (/^rec[A-Za-z0-9]{14}$/.test(cleaningType)) cleaningType = '';
       return {
         id: record.id,
         propertyText: f['Property Text'] || 'Propiedad sin nombre',
@@ -85,7 +115,7 @@ export default async function handler(req, res) {
         date: rawDate || null, formattedDate,
         scheduledTime: f['Scheduled Time'] || null,
         notes: f['OpenComments'] || '',
-        staffList, equipmentCount, attachments,
+        staffList, staffIds: assignedStaffIds, staffNames, equipmentCount, attachments, cleaningType,
       };
     });
 
