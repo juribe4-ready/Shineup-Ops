@@ -193,6 +193,7 @@ export default function App() {
       cleaning={selectedCleaning}
       onBack={() => { setSelectedCleaning(null); loadCleanings(selectedDate) }}
       staffId={profile?.staff_airtable_id || undefined}
+      shiftClosed={selectedCleaning.date && String(selectedCleaning.date).slice(0, 10) !== todayStr ? true : !!(shifts && shifts.length > 0 && shifts.every(x => x.closed))}
     />
   )
 
@@ -202,6 +203,7 @@ export default function App() {
     <>
       {toastEl}
       <CloseShiftPage
+        closedBy={profile?.full_name || profile?.email || ''}
         date={todayStr} shifts={shifts} team={team}
         inProgress={todayCleanings.filter(c => c.status === 'In Progress').map(c => c.propertyText || 'Casa')}
         onBack={() => setShowClose(false)}
@@ -391,7 +393,7 @@ export default function App() {
             onAddMissing={() => setRollCall({ cleaning: null, onlyMissing: true })}
             onScanLoad={() => setLaundryMode('load')}
             refreshKey={loadRefresh}
-            onReopen={async () => { const r = await reopenShifts((shifts || []).map(x => x.id)); if (r.ok) { laundryToast('Turno reabierto ✓'); loadShifts() } else laundryToast(`No se pudo reabrir: ${r.error}`, 'err') }}
+            onReopen={async () => { const r = await reopenShifts(shifts || [], profile.full_name || profile.email || ''); if (r.ok) { laundryToast('Turno reabierto ✓'); loadShifts() } else laundryToast(`No se pudo reabrir: ${r.error}`, 'err') }}
             onClose={() => setShowClose(true)}
             onReload={loadShifts}
           />
