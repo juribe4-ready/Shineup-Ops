@@ -26,6 +26,12 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
   const push = (code: string, msg: string, ok = true) => setLog(l => [{ code, msg, ok }, ...l].slice(0, 8))
 
   const stateOf = (info: any): string | null => info?.cycle?.state || info?.bag?.state || null
+  // Estado de ESTA maleta física: el ciclo puede estar «In Use» porque la otra maleta de la casa ya salió, y esta aún no.
+  const unitStateOf = (info: any): string | null => {
+    const st = stateOf(info)
+    if (st === 'In Use' && info?.cycle && !unitIsLoaded(info.cycle, info.unit || 1)) return 'Clean'
+    return st
+  }
 
   async function loadBag(codeIn: string | string[]) {
     const codes = Array.isArray(codeIn) ? codeIn : [codeIn]
@@ -47,7 +53,7 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
   async function markDirty(info: any, cleaning: Cl) {
     setBusy(true)
     try {
-      const r = await submit('declareReturn', { cleaningId: cleaning.id, bagId: info.bag.id, units: [{ unit: 1, status: 'dirty' }], condition: 'Normal', short: [] })
+      const r = await submit('declareReturn', { cleaningId: cleaning.id, bagId: info.bag.id, units: [{ unit: info.unit || 1, status: 'dirty' }], condition: 'Normal', short: [] })
       onToast(r.status === 'queued' ? 'Sin señal: se enviará sola' : `${info.bag.code || info.bag.name} marcada sucia ✓`)
       onChanged(); setCard(null); setPick(null)
     } catch (e: any) { setErr(e.message); onToast(e.message, 'err') } finally { setBusy(false) }
@@ -87,7 +93,7 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
   }
 
   const bagCard = (c: Extract<Card, { kind: 'bag' }>) => {
-    const info = c.info; const st = stateOf(info)
+    const info = c.info; const st = unitStateOf(info)
     const useFinal = st === 'Clean' && info.cycle?.finalContent?.counts
     const counts: Record<string, number> = useFinal ? info.cycle.finalContent.counts : (info.bag.standard || {})
     const houses = (info.bag.properties || []).map((p: any) => p.name).join(' · ')
@@ -114,7 +120,7 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
             {pick.map(p => <button key={p.id} disabled={busy} onClick={() => markDirty(info, p)} className="w-full text-left py-2.5 px-3 mb-1.5 rounded-xl font-bold text-[13px]" style={{ border: `1.5px solid ${L.border}`, color: L.ink }}>{p.propertyText}</button>)}
           </div>
         )}
-        {mode === 'load' && (() => {
+        {(mode === 'load' || st === 'Clean') && (() => {
           const rest = getUnits().filter(u => u.bagId === info.bag.id && !u.loaded && u.code.toUpperCase() !== c.code)
           return rest.length > 0 ? (
             <div className="mt-3"><Big ghost color={TEAL} disabled={busy} onClick={() => loadBag([c.code, ...rest.map(u => u.code)])}>Cargar las {rest.length + 1} maletas de la casa</Big></div>
