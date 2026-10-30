@@ -83,7 +83,12 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
         equipCache.set(id, list)
         return list
       })
-      for (const r of res) for (const e of (r.v || [])) if (e.code && e.code !== 'N/A' && !all.some(x => x.code === e.code)) all.push(e)
+      res.forEach((r, i) => { for (const e of (r.v || [])) {
+        if (!e.code || e.code === 'N/A') continue
+        const ex = all.find(x => x.code === e.code)
+        if (ex) ex.cids = [...new Set([...(ex.cids || []), ids[i]])]
+        else all.push({ ...e, cids: [ids[i]] })
+      } })
       if (alive) { setEqFail(res.filter(r => !r.ok).length); setEquip(all); setEquipment(all) }
     })()
     return () => { alive = false }

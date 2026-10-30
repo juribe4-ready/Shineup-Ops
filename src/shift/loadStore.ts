@@ -1,6 +1,6 @@
 // Lista de kits y herramientas asignadas hoy + cuáles ya se cargaron al transporte.
 // Se guarda solo en el teléfono (por día): no existe todavía un campo en Airtable para esto.
-export interface Equip { code: string; text: string }
+export interface Equip { code: string; text: string; cids?: string[] }
 let equipment: Equip[] = []
 const listeners = new Set<() => void>()
 const day = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -40,3 +40,11 @@ export function unitCodesOf(bag: { code?: string | null; qty?: number }): string
 }
 // ¿esa maleta (n = 1..qty) ya salió con el cleaner?
 export const unitIsLoaded = (cycle: any, n: number) => cycle?.state === 'In Use' && (!(cycle.unitsOut || []).length || cycle.unitsOut.includes(n))
+
+// Resumen de carga de UNA casa/limpieza para la agenda (solo si ya se abrió la lista de carga del turno)
+export function loadSummary(cleaningId: string, propertyId?: string | null) {
+  const us = propertyId ? units.filter(u => u.propertyId === propertyId) : []
+  const eq = equipment.filter(e => (e.cids || []).includes(cleaningId))
+  const ck = getChecked()
+  return { bags: us.length, bagsLoaded: us.filter(u => u.loaded).length, kits: eq.length, kitsLoaded: eq.filter(e => ck.has(e.code.trim().toUpperCase())).length }
+}
