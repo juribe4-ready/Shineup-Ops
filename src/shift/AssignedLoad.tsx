@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Package, Wrench, ScanLine, Check } from 'lucide-react'
-import { LAUNDRY_ENABLED, lGet } from '../laundry/api'
-import { Equip, setEquipment, getChecked, setChecked, subscribeLoad, setUnits, getUnits, unitCodesOf, unitIsLoaded, BagUnit } from './loadStore'
-import { Modal, L } from '../laundry/ui'
+import { LAUNDRY_ENABLED, lGet, lPost } from '../laundry/api'
+import { Equip, setEquipment, getEquipment, getChecked, setChecked, subscribeLoad, setUnits, getUnits, unitCodesOf, unitIsLoaded, BagUnit } from './loadStore'
+import { Modal, Big, L } from '../laundry/ui'
 
 const TEAL = '#0E7C86'
 interface Cl { id: string; propertyId?: string | null; propertyText?: string; status?: string }
@@ -18,6 +18,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
   const [checked, setCheckedState] = useState<Set<string>>(getChecked())
   const [units, setUnitsState] = useState<BagUnit[]>(getUnits())
   const [info, setInfo] = useState<BagUnit | null>(null)
+  const [undoOpen, setUndoOpen] = useState(false)
   const key = cleanings.map(c => c.id).join(',')
 
   useEffect(() => subscribeLoad(() => { setCheckedState(getChecked()); setUnitsState(getUnits()) }), [])
@@ -166,6 +167,12 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
           </button>
         ) })}
 
+      {units.some(u => u.loaded) && (
+        <button onClick={() => setUndoOpen(true)} className="w-full mt-2 py-2.5 rounded-xl font-bold text-[13px]" style={{ border: '1.5px solid #FCA5A5', color: '#B91C1C', background: '#FEF2F2' }}>
+          ↩ Borrar carga ({units.filter(u => u.loaded).length} maletas cargadas)
+        </button>
+      )}
+
       {/* Kits y herramientas */}
       <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Wrench className="inline w-3 h-3 mr-1" />Kits y herramientas</p>
       {equip === null ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Cargando…</p>
@@ -186,6 +193,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
         <ScanLine className="w-4 h-4" />Escanear carga
       </button>
       {info && <BagContents unit={info} onClose={() => setInfo(null)} />}
+      {undoOpen && <UndoLoad units={units} onClose={() => setUndoOpen(false)} onDone={() => { setUndoOpen(false); setRetry(x => x + 1) }} />}
     </div>
   )
 }
@@ -211,6 +219,44 @@ function BagContents({ unit, onClose }: { unit: BagUnit; onClose: () => void }) 
           {!Object.keys(counts).length && <p className="text-[12px]" style={{ color: L.muted }}>Esta maleta no tiene contenido definido.</p>}
         </div>
       )}
+    </Modal>
+  )
+}
+
+
+// Borrar la carga de casas ya cargadas (vuelven a «Clean» para poder cargarlas de nuevo). Solo deshace lo cargado y sin devolver.
+function UndoLoad({ units, onClose, onDone }: { units: BagUnit[]; onClose: () => void; onDone: () => void }) {
+  const houses = [...new Map(units.filter(u => u.loaded).map(u => [u.bagId, u])).values()]
+  const [sel, setSel] = useState<Set<string>>(new Set(houses.map(h => h.bagId)))
+  const [kits, setKits] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const go = async () => {
+    setBusy(true); setMsg('')
+    const fails: string[] = []
+    for (const h of houses.filter(x => sel.has(x.bagId))) {
+      try { await lPost('undoLoad', { bagId: h.bagId }) } catch (e: any) { fails.push(`${h.house}: ${e.message || 'error'}`) }
+    }
+    if (kits) getEquipment().forEach(e => setChecked(e.code, false))
+    setBusy(false)
+    if (fails.length) setMsg(fails.join(' · ')); else onDone()
+  }
+  return (
+    <Modal title="Borrar carga" onClose={onClose}
+      footer={<Big color={L.red} disabled={busy || (!sel.size && !kits)} onClick={go}>{busy ? 'Borrando…' : `Borrar carga de ${sel.size} casa${sel.size === 1 ? '' : 's'}`}</Big>}>
+      <p className="text-[12px]" style={{ color: L.slate }}>Las casas elegidas vuelven a «lista para cargar» y podrás escanearlas de nuevo. No afecta las que ya se devolvieron sucias.</p>
+      {houses.map(h => {
+        const on = sel.has(h.bagId)
+        return (
+          <button key={h.bagId} onClick={() => setSel(s => { const n = new Set(s); on ? n.delete(h.bagId) : n.add(h.bagId); return n })} className="w-full flex items-center gap-3 py-2 text-left" style={{ borderTop: '1px solid #F1F5F9' }}>
+            <span className="rounded-lg flex items-center justify-center shrink-0" style={{ width: 24, height: 24, background: on ? L.red : '#fff', border: `2px solid ${on ? L.red : '#CBD5E1'}`, color: '#fff' }}>{on && <Check className="w-4 h-4" />}</span>
+            <span className="flex-1 font-bold text-[13px] truncate" style={{ color: L.ink }}>{h.house}</span>
+            <span className="text-[11px]" style={{ color: L.muted }}>{units.filter(u => u.bagId === h.bagId && u.loaded).length} cargadas</span>
+          </button>
+        )
+      })}
+      <label className="flex items-center gap-2 text-[12px] font-semibold mt-1" style={{ color: L.slate }}><input type="checkbox" checked={kits} onChange={e => setKits(e.target.checked)} /> Desmarcar también los kits y herramientas</label>
+      {msg && <p className="text-[12px] font-semibold" style={{ color: L.red }}>{msg}</p>}
     </Modal>
   )
 }
