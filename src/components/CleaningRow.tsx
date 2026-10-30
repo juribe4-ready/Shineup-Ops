@@ -1,5 +1,6 @@
-import { memo, useMemo } from 'react'
-import { Clock, Package, Home } from 'lucide-react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { Clock, Home, Luggage, Warehouse, LogIn, LogOut, TriangleAlert, PackageX, Hammer } from 'lucide-react'
+import { subscribeLoad, loadSummary } from '../shift/loadStore'
 
 // Fila de la agenda (reemplaza visualmente a CleaningCard en la pantalla principal).
 const TEAL = '#0E7C86'
@@ -42,6 +43,7 @@ function formatTime(v?: string): string | null {
 interface Props {
   cleaning: {
     id: string; status?: string; propertyText?: string; address?: string; scheduledTime?: string
+    propertyId?: string | null; hasEntry?: boolean; hasExit?: boolean; hasStorage?: boolean; incidentCount?: number; ruptureCount?: number
     staffList?: string[]; equipmentCount?: number; attachments?: Array<{ url: string }>; cleaningType?: string
   }
   onClick: () => void
@@ -56,6 +58,9 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
   const time = useMemo(() => formatTime(cleaning.scheduledTime), [cleaning.scheduledTime])
   const staff = cleaning.staffList || []
   const eq = cleaning.equipmentCount ?? 0
+  const [, tick] = useState(0)
+  useEffect(() => subscribeLoad(() => tick(n => n + 1)), [])
+  const ld = loadSummary(cleaning.id, cleaning.propertyId)
   return (
     <button
       onClick={onClick}
@@ -87,16 +92,30 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
                 ))
               : <span className="text-[10px]" style={{ color: '#CBD5E1' }}>Sin staff</span>}
           </div>
-          {eq > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ background: '#F1F5F9', color: '#475569' }}>
-              <Package className="w-3 h-3" />{eq}
-            </span>
+          {ld.bags > 0 && (
+            <Chip ok={ld.bagsLoaded === ld.bags} title="Maletas cargadas"><Luggage className="w-3 h-3" />{ld.bagsLoaded}/{ld.bags}</Chip>
           )}
+          {eq > 0 && (
+            <Chip ok={ld.kits > 0 && ld.kitsLoaded === ld.kits} title="Kits y herramientas"><Hammer className="w-3 h-3" />{ld.kits > 0 ? `${ld.kitsLoaded}/${ld.kits}` : eq}</Chip>
+          )}
+          <span className="flex-1" />
+          <Ico on={!!cleaning.hasEntry} title="Video de entrada"><LogIn className="w-3.5 h-3.5" /></Ico>
+          <Ico on={!!cleaning.hasStorage} title="Foto de almacén"><Warehouse className="w-3.5 h-3.5" /></Ico>
+          <Ico on={!!cleaning.hasExit} title="Cierre (salida)"><LogOut className="w-3.5 h-3.5" /></Ico>
+          {(cleaning.incidentCount || 0) > 0 && <Chip bad title="Incidentes"><TriangleAlert className="w-3 h-3" />{cleaning.incidentCount}</Chip>}
+          {(cleaning.ruptureCount || 0) > 0 && <Chip bad title="Rupturas / inventario"><PackageX className="w-3 h-3" />{cleaning.ruptureCount}</Chip>}
         </div>
       </div>
     </button>
   )
 })
+function Chip({ children, ok, bad, title }: { children: React.ReactNode; ok?: boolean; bad?: boolean; title: string }) {
+  return <span title={title} className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: bad ? '#FEE2E2' : ok ? '#DCFCE7' : '#F1F5F9', color: bad ? '#B91C1C' : ok ? '#15803D' : '#475569' }}>{children}</span>
+}
+// Hecho = verde; pendiente = gris claro
+function Ico({ on, title, children }: { on: boolean; title: string; children: React.ReactNode }) {
+  return <span title={title} className="flex items-center justify-center w-6 h-6 rounded-md" style={{ background: on ? '#DCFCE7' : '#F1F5F9', color: on ? '#15803D' : '#CBD5E1' }}>{children}</span>
+}
 CleaningRow.displayName = 'CleaningRow'
 export default CleaningRow
 export { TEAL }

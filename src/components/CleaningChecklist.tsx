@@ -662,7 +662,8 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                       {videoThumbs.map((url, i) => {
                         const isVid = isVideoUrl(url)
                         return (
-                          <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
+                          <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer"
+                            onClick={() => window.open(url, '_blank', 'noopener')} title="Abrir en otra pestaña"
                             style={{ border: `2px solid ${C.teal}`, background: isVid ? C.ink : C.bg }}>
                             {isVid ? (
                               <div className="flex flex-col items-center gap-0.5">
@@ -801,7 +802,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
             </div>
             {storagePhoto ? (
               <div className="relative rounded-2xl overflow-hidden" style={{ height: '140px' }}>
-                <img src={storagePhoto} alt="almacén" className="w-full h-full object-cover" />
+                <img src={storagePhoto} alt="almacén" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(storagePhoto, '_blank', 'noopener')} />
                 <div className="absolute inset-0 flex items-end p-2 justify-end" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.3), transparent)' }}>
                   <button onClick={() => editable && storageInputRef.current?.click()}
                     className="text-[10px] font-bold px-2.5 py-1 rounded-xl text-white"
@@ -939,7 +940,8 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 {closingPhotos.map((photo, i) => {
                   const isVid = isVideoUrl(photo.url) || isVideoUrl(photo.filename || '')
                   return (
-                    <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
+                    <div key={i} className="relative w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer"
+                      onClick={() => window.open(photo.url, '_blank', 'noopener')} title="Abrir en otra pestaña"
                       style={{ border: `2px solid ${C.teal}`, background: isVid ? C.ink : C.bg }}>
                       {isVid ? (
                         <div className="flex flex-col items-center gap-0.5">
@@ -1028,7 +1030,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
           <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
             {selectedIncident.photoUrls && selectedIncident.photoUrls.length > 0 && (
               <div className="w-full h-48 bg-slate-100">
-                <img src={selectedIncident.photoUrls[0]} alt="foto incidente" className="w-full h-full object-cover" />
+                <img src={selectedIncident.photoUrls[0]} alt="foto incidente" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(selectedIncident.photoUrls[0], '_blank', 'noopener')} />
               </div>
             )}
             <div className="p-5">
@@ -1060,7 +1062,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
           <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
             {selectedInventory.photoUrls && selectedInventory.photoUrls.length > 0 && (
               <div className="w-full h-48 bg-slate-100">
-                <img src={selectedInventory.photoUrls[0]} alt="foto inventario" className="w-full h-full object-cover" />
+                <img src={selectedInventory.photoUrls[0]} alt="foto inventario" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(selectedInventory.photoUrls[0], '_blank', 'noopener')} />
               </div>
             )}
             <div className="p-5">
