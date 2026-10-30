@@ -21,20 +21,40 @@ export default async function handler(req, res) {
     // Staff initials (se pide en paralelo con las limpiezas)
     const staffMap = {};
     const nameMap = {};
+    const roleMap = {};
+    let rolesKnown = false;
     const staffPromise = (async () => {
       try {
         // Con Name (para el pase de lista); si Airtable lo rechaza, se pide como antes (solo Initials)
-        let staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials&fields[]=Name`, { headers: hdrs });
+        let staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials&fields[]=Name&fields[]=Role`, { headers: hdrs });
+        if (!staffRes.ok) staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials&fields[]=Name`, { headers: hdrs });
+        else rolesKnown = true;
         if (!staffRes.ok) staffRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblgHwN1wX6u3ZtNY?fields[]=Initials`, { headers: hdrs });
         if (staffRes.ok) {
           const staffData = await staffRes.json();
           for (const s of (staffData.records || [])) {
             staffMap[s.id] = s.fields?.Initials || s.fields?.Name?.substring(0, 2).toUpperCase() || '??';
             if (s.fields?.Name) nameMap[s.id] = String(s.fields.Name);
+            roleMap[s.id] = String(s.fields?.Role || '').toLowerCase();
           }
         }
       } catch {}
     })();
+
+    // Incidentes y rupturas (inventario) por limpieza: lectura de apoyo, nunca bloquea la agenda
+    const incByCleaning = {}; const invByCleaning = {};
+    const tally = async (url, field, into) => {
+      try {
+        const r = await fetch(url, { headers: hdrs });
+        if (!r.ok) return;
+        const d = await r.json();
+        for (const rec of (d.records || [])) for (const id of [].concat(rec.fields?.[field] || [])) if (typeof id === 'string') into[id] = (into[id] || 0) + 1;
+      } catch {}
+    };
+    const tallyPromise = Promise.all([
+      tally(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Incidents?maxRecords=100&sort[0][field]=Creation Date&sort[0][direction]=desc&fields[]=${encodeURIComponent('Cleaning ID')}`, 'Cleaning ID', incByCleaning),
+      tally(`https://api.airtable.com/v0/${AIRTABLE_BASE}/tblppdLDDnyT0eye9?maxRecords=100&sort[0][field]=Date&sort[0][direction]=desc&fields[]=Cleanings`, 'Cleanings', invByCleaning),
+    ]);
 
     // Descarga todas las paginas de una URL. Devuelve null si Airtable responde error.
     const fetchAll = async (extraQuery) => {
@@ -57,7 +77,7 @@ export default async function handler(req, res) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
       const shift = (n) => { const d = new Date(effectiveDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
       const formula = `OR(IS_SAME({Date},'${shift(-1)}','day'),IS_SAME({Date},'${effectiveDate}','day'),IS_SAME({Date},'${shift(1)}','day'))`;
-      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'Cleaning Type Text', 'Cleaning Type', 'Property'];
+      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'VideoInicialURLs', 'VideoInicial', 'ClosingMediaURLs', 'Photos & Videos', 'StoragePhotoURL', 'StoragePhoto', 'Cleaning Type Text', 'Cleaning Type', 'Property'];
       const q = `&filterByFormula=${encodeURIComponent(formula)}` + FIELDS.map(f => `&fields[]=${encodeURIComponent(f)}`).join('');
       try {
         const fast = await fetchAll(q);
@@ -71,6 +91,7 @@ export default async function handler(req, res) {
       allRecords = full.records;
     }
     await staffPromise;
+    await tallyPromise;
 
     console.log(`[getCleanings] Total leidos: ${allRecords.length}`);
 
@@ -95,8 +116,14 @@ export default async function handler(req, res) {
       const address = Array.isArray(addressRaw) ? addressRaw[0] : (addressRaw || 'Direccion no disponible');
       const staffListRaw = f['staffList'] || '';
       const assignedStaffIds = Array.isArray(f['Assigned Staff']) ? f['Assigned Staff'] : [];
-      const staffList = assignedStaffIds.map(id => staffMap[id] || '??').filter(Boolean);
-      const staffNames = assignedStaffIds.map(id => nameMap[id] || staffMap[id] || '');
+      // Solo cleaners en la agenda (gerentes y asistentes no aparecen). Si Airtable no entrega el rol, se muestran todos como antes.
+      const shown = assignedStaffIds.filter(id => !rolesKnown || (roleMap[id] || '').includes('cleaner'));
+      const staffList = shown.map(id => staffMap[id] || '??').filter(Boolean);
+      const staffNames = shown.map(id => nameMap[id] || staffMap[id] || '');
+      const hasVal = (v) => (Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim()));
+      const hasEntry = hasVal(f['VideoInicialURLs']) || hasVal(f['VideoInicial']);
+      const hasExit = hasVal(f['ClosingMediaURLs']) || hasVal(f['Photos & Videos']);
+      const hasStorage = hasVal(f['StoragePhotoURL']) || hasVal(f['StoragePhoto']);
       const equipment = f['Equipment'] || [];
       const equipmentCount = Array.isArray(equipment) ? equipment.length : 0;
       const rawDate = f['Date'];
@@ -117,7 +144,8 @@ export default async function handler(req, res) {
         date: rawDate || null, formattedDate,
         scheduledTime: f['Scheduled Time'] || null,
         notes: f['OpenComments'] || '',
-        staffList, staffIds: assignedStaffIds, staffNames, equipmentCount, attachments, cleaningType, propertyId,
+        staffList, staffIds: shown, staffNames, equipmentCount, attachments, cleaningType, propertyId,
+        hasEntry, hasExit, hasStorage, incidentCount: incByCleaning[record.id] || 0, ruptureCount: invByCleaning[record.id] || 0,
       };
     });
 
