@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import BagsPanel, { BagsPanelHandle } from '../laundry/BagsPanel'
 import {
   ArrowLeft, Home, Play, BarChart2, Flag, Camera,
   Star, BookOpen, Package, CheckCircle2,
@@ -272,6 +273,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
   const [finishing, setFinishing]           = useState(false)
   const [toast, setToast]                   = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
+  const bagsRef = useRef<BagsPanelHandle>(null)
   const detalleRef = useRef<HTMLDivElement>(null)
   const inicioRef  = useRef<HTMLDivElement>(null)
   const reporteRef = useRef<HTMLDivElement>(null)
@@ -398,6 +400,8 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
   }
 
   const handleFinish = async () => {
+    // Laundry: antes de cerrar, el cleaner declara qué deja sucio (si no hay maletas, pasa directo)
+    if (bagsRef.current && !(await bagsRef.current.ensureDeclared())) return
     setFinishing(true)
     try {
       await fetch('/api/updateCleaning', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cleaningId: cleaning.id, endTime: new Date().toISOString(), status: 'Done' }) })
@@ -913,6 +917,9 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
             {!isInProgress && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para interactuar</p>}
           </div>
         </div>
+
+        {/* ── LAUNDRY: maletas de la propiedad ────────── */}
+        <BagsPanel ref={bagsRef} cleaningId={cleaning.id} propertyId={details?.propertyId} isInProgress={isInProgress} onToast={showToast} />
 
         {/* ── CIERRE ──────────────────────────────────── */}
         <div ref={cierreRef} style={{ opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
