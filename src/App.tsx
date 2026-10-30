@@ -9,7 +9,7 @@ import LaundryTools from './laundry/LaundryTools'
 import { LAUNDRY_ENABLED } from './laundry/api'
 import { startOutbox } from './laundry/outbox'
 import { ShiftTab, CloseShiftPage, RollCallSheet } from './shift/ShiftPage'
-import { Shift, Person, getShifts, startShifts, fromInput } from './shift/shiftApi'
+import { Shift, Person, getShifts, startShifts, fromInput, reopenShifts } from './shift/shiftApi'
 
 const TEAL      = '#00BCD4'
 const TEAL_DARK = '#0097A7'
@@ -17,6 +17,7 @@ const TEAL_DARK = '#0097A7'
 interface Cleaning {
   id: string
   propertyText?: string
+  propertyId?: string | null
   address?: string
   status?: string
   date?: string
@@ -53,7 +54,8 @@ export default function App() {
   const [rollBusy, setRollBusy]             = useState(false)
   const [rollSkipped, setRollSkipped]       = useState(false)
   const [showClose, setShowClose]           = useState(false)
-  const [laundryMode, setLaundryMode]       = useState<null | 'scan' | 'shift'>(null)
+  const [laundryMode, setLaundryMode]       = useState<null | 'scan' | 'shift' | 'load'>(null)
+  const [loadRefresh, setLoadRefresh]       = useState(0)
   const stripRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
 
@@ -268,10 +270,11 @@ export default function App() {
         </div>
 
         {toastEl}
-        <div className="px-5"><LaundryTools hideButtons forceMode={laundryMode} onModeClose={() => setLaundryMode(null)} onToast={laundryToast} /></div>
+        <div className="px-5"><LaundryTools hideButtons forceMode={laundryMode} onModeClose={() => setLaundryMode(null)} onToast={laundryToast} cleanings={todayCleanings} onChanged={() => setLoadRefresh(n => n + 1)} /></div>
 
         <div className="px-5" style={{ display: tab === 'agenda' ? 'block' : 'none' }}>
-          {/* Mes + acciones */}
+          {/* Calendario fijo: se queda arriba mientras se hace scroll */}
+          <div className="sticky top-0 z-30 -mx-5 px-5 pt-2 pb-1" style={{ background: '#F8FAFC', paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
           <div className="flex items-center justify-between mb-2">
             <p className="font-bold text-[15px]" style={{ color: '#0F172A' }}>{monthLabel}</p>
             <div className="flex items-center gap-2">
@@ -307,16 +310,18 @@ export default function App() {
             })}
           </div>
 
+          </div>
+
           {/* Resumen del dia: barra + pills de estado (filtran) */}
           {!loadingData && !error && cleanings.length > 0 && (
             <div className="rounded-2xl bg-white p-3 mt-1 mb-3" style={{ border: '1px solid #E2E8F0' }}>
               <div className="flex items-baseline gap-2 mb-2">
                 <b className="text-[13px]" style={{ color: '#0F172A' }}>{summaryLabel}</b>
-                <span className="text-[11.5px]" style={{ color: '#64748B' }}>{stats.done} de {stats.total} terminadas</span>
+                <span className="text-[11.5px]" style={{ color: '#64748B' }}>{stats.done} de {stats.total} terminadas · {stats.percent}%</span>
               </div>
-              <div className="flex gap-[3px] mb-2.5" style={{ height: 7 }}>
-                {cleanings.map(c => (
-                  <i key={c.id} style={{ flex: 1, borderRadius: 4, background: (STATUS_STYLE[normStatus(c.status)] || STATUS_STYLE.Programmed).dot }} />
+              <div className="flex overflow-hidden rounded-full mb-2.5" style={{ height: 10, background: '#EEF2F6' }}>
+                {(['Done', 'In Progress', 'Opened', 'Programmed'] as const).map(k => countOf[k] > 0 && (
+                  <div key={k} title={`${k} ${countOf[k]}`} style={{ width: `${(countOf[k] / Math.max(1, stats.total)) * 100}%`, background: STATUS_STYLE[k].dot, transition: 'width .4s' }} />
                 ))}
               </div>
               <div className="flex gap-1.5 flex-wrap">
@@ -384,7 +389,9 @@ export default function App() {
             missing={missingTeam}
             onStart={() => setRollCall({ cleaning: null })}
             onAddMissing={() => setRollCall({ cleaning: null, onlyMissing: true })}
-            onScanLoad={() => setLaundryMode('shift')}
+            onScanLoad={() => setLaundryMode('load')}
+            refreshKey={loadRefresh}
+            onReopen={async () => { const r = await reopenShifts((shifts || []).map(x => x.id)); if (r.ok) { laundryToast('Turno reabierto ✓'); loadShifts() } else laundryToast(`No se pudo reabrir: ${r.error}`, 'err') }}
             onClose={() => setShowClose(true)}
             onReload={loadShifts}
           />
