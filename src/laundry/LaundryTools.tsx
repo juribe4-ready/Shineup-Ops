@@ -6,8 +6,11 @@ import Scanner from './Scanner'
 import { Big, L, Modal } from './ui'
 
 // Botones globales en la pantalla de inicio de Ops: escanear una maleta y cargar el turno.
-export default function LaundryTools({ onToast }: { onToast: (m: string, t?: 'ok' | 'err') => void }) {
-  const [mode, setMode] = useState<null | 'scan' | 'shift'>(null)
+export default function LaundryTools({ onToast, forceMode, onModeClose, hideButtons }: { onToast: (m: string, t?: 'ok' | 'err') => void; forceMode?: null | 'scan' | 'shift'; onModeClose?: () => void; hideButtons?: boolean }) {
+  const [localMode, setMode] = useState<null | 'scan' | 'shift'>(null)
+  // Los botones internos o una orden desde fuera (pestañas de la app) abren el mismo escáner
+  const mode = forceMode ?? localMode
+  const closeMode = () => { setMode(null); onModeClose?.() }
   const [pending, setPending] = useState(0)
   useEffect(() => {
     if (!LAUNDRY_ENABLED) return
@@ -19,17 +22,17 @@ export default function LaundryTools({ onToast }: { onToast: (m: string, t?: 'ok
   if (!LAUNDRY_ENABLED) return null
   return (
     <>
-      <div className="flex gap-2 mb-3">
+      {!hideButtons && <div className="flex gap-2 mb-3">
         <button onClick={() => setMode('scan')} className="flex-1 py-2.5 rounded-2xl text-[12px] font-bold flex items-center justify-center gap-1.5 bg-white shadow-sm" style={{ color: '#0097A7' }}><ScanLine className="w-4 h-4" /> Escanear maleta</button>
         <button onClick={() => setMode('shift')} className="flex-1 py-2.5 rounded-2xl text-[12px] font-bold flex items-center justify-center gap-1.5 bg-white shadow-sm" style={{ color: '#0097A7' }}><PackagePlus className="w-4 h-4" /> Carga de turno</button>
-      </div>
+      </div>}
       {pending > 0 && (
         <button onClick={() => flush().then(n => onToast(n ? `${n} envío(s) sincronizado(s)` : 'Sigue sin señal'))} className="w-full mb-3 py-2 rounded-xl text-[12px] font-bold flex items-center justify-center gap-1.5" style={{ background: '#FEF3C7', color: '#92400E' }}>
           <CloudOff className="w-4 h-4" /> {pending} pendiente(s) por enviar · toca para reintentar
         </button>
       )}
-      {mode === 'scan' && <ScanOne onClose={() => setMode(null)} />}
-      {mode === 'shift' && <ShiftLoad onClose={() => setMode(null)} onToast={onToast} />}
+      {mode === 'scan' && <ScanOne onClose={closeMode} />}
+      {mode === 'shift' && <ShiftLoad onClose={closeMode} onToast={onToast} />}
     </>
   )
 }
