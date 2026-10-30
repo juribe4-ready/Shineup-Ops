@@ -19,6 +19,25 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
 
   useEffect(() => subscribeLoad(() => setCheckedState(getChecked())), [])
 
+  // Pool con concurrencia limitada + reintentos (Airtable limita ~5 consultas/seg: 14 casas en paralelo daba error 429)
+  const pool = async <T,>(items: string[], n: number, fn: (x: string) => Promise<T>) => {
+    const out: { item: string; ok: boolean; v?: T }[] = []
+    let i = 0
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (i < items.length) {
+        const item = items[i++]
+        let ok = false, v: T | undefined
+        for (let t = 0; t < 4 && !ok; t++) {
+          try { v = await fn(item); ok = true } catch { await new Promise(r => setTimeout(r, 500 * (t + 1))) }
+        }
+        out.push({ item, ok, v })
+      }
+    }))
+    return out
+  }
+  const [retry, setRetry] = useState(0)
+  const [eqFail, setEqFail] = useState(0)
+
   // Maletas por casa de hoy
   useEffect(() => {
     if (!LAUNDRY_ENABLED) { setBags([]); return }
@@ -26,35 +45,38 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
     const props = [...new Set(cleanings.map(c => c.propertyId).filter(Boolean) as string[])]
     if (!props.length) { setBags([]); return }
     ;(async () => {
-      try {
-        const res = await Promise.all(props.map(p => lGet<{ bags: any[] }>('bagsByProperty', { propertyId: p }).then(r => r.bags)))
-        const seen = new Set<string>(); const list: any[] = []
-        for (const b of res.flat()) if (!seen.has(b.id)) { seen.add(b.id); list.push(b) }
-        if (alive) { setBags(list); setBagErr('') }
-      } catch (e: any) { if (alive) { setBags([]); setBagErr(e.message || 'No pude leer las maletas') } }
+      const res = await pool(props, 3, p => lGet<{ bags: any[] }>('bagsByProperty', { propertyId: p }).then(r => r.bags))
+      const seen = new Set<string>(); const list: any[] = []
+      for (const r of res) for (const b of (r.v || [])) if (!seen.has(b.id)) { seen.add(b.id); list.push(b) }
+      const failed = res.filter(r => !r.ok).length
+      if (!alive) return
+      setBags(list)
+      setBagErr(failed ? `No pude leer las maletas de ${failed} casa${failed > 1 ? 's' : ''} (Airtable está saturado).` : '')
     })()
     return () => { alive = false }
-  }, [key, refreshKey])
+  }, [key, refreshKey, retry])
 
   // Kits y herramientas (equipamiento) de las limpiezas de hoy
   useEffect(() => {
     let alive = true
     ;(async () => {
       const all: Equip[] = []
-      await Promise.all(cleanings.map(async c => {
-        let list = equipCache.get(c.id)
-        if (!list) {
-          try {
-            const r = await fetch(`/api/getCleaningTasks?cleaningId=${c.id}`)
-            if (r.ok) { const j = await r.json(); list = (j?.cleaning?.equipment || []).map((e: any) => ({ code: String(e.code || ''), text: String(e.text || '') })); equipCache.set(c.id, list!) }
-          } catch { /* sin datos de esta casa */ }
-        }
-        for (const e of list || []) if (e.code && e.code !== 'N/A' && !all.some(x => x.code === e.code)) all.push(e)
-      }))
-      if (alive) { setEquip(all); setEquipment(all) }
+      const ids = cleanings.map(c => c.id)
+      const res = await pool(ids, 4, async id => {
+        const cached = equipCache.get(id)
+        if (cached) return cached
+        const r = await fetch(`/api/getCleaningTasks?cleaningId=${id}`)
+        if (!r.ok) throw new Error(String(r.status))
+        const j = await r.json()
+        const list: Equip[] = (j?.cleaning?.equipment || []).map((e: any) => ({ code: String(e.code || ''), text: String(e.text || '') }))
+        equipCache.set(id, list)
+        return list
+      })
+      for (const r of res) for (const e of (r.v || [])) if (e.code && e.code !== 'N/A' && !all.some(x => x.code === e.code)) all.push(e)
+      if (alive) { setEqFail(res.filter(r => !r.ok).length); setEquip(all); setEquipment(all) }
     })()
     return () => { alive = false }
-  }, [key])
+  }, [key, retry])
 
   const loadedBag = (b: any) => b.cycle?.state === 'In Use'
   const missingBags = (bags || []).filter(b => !loadedBag(b)).length
@@ -77,7 +99,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
     <div className="p-4" style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16 }}>
       <div className="flex items-center">
         <p className="font-bold text-[14px]" style={{ color: '#0F172A' }}>Cargar transporte</p>
-        {(bags !== null && equip !== null) && (
+        {(bags !== null && equip !== null && !bagErr && !eqFail) && (
           <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full" style={missing ? { background: '#FEF3C7', color: '#92400E' } : { background: '#E8F8EF', color: '#15803D' }}>
             {missing ? `falta ${missing}` : 'todo cargado ✓'}
           </span>
@@ -85,7 +107,14 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
       </div>
       <p className="text-[12px] mb-1" style={{ color: '#64748B' }}>Lo asignado a tus casas de hoy. Escanea para cargarlo.</p>
 
-      {(bags !== null && equip !== null && tot > 0) && (
+      {(bagErr || eqFail > 0) && (
+        <div className="mt-2 p-3 rounded-xl text-[12px]" style={{ background: '#FEF2F2', color: '#B91C1C' }}>
+          <p className="font-bold">No se pudo leer todo{eqFail ? ` (${eqFail} casa${eqFail > 1 ? 's' : ''} sin equipo)` : ''}.</p>
+          <p>{bagErr || 'Los totales pueden estar incompletos.'}</p>
+          <button onClick={() => setRetry(x => x + 1)} className="mt-2 px-3 py-1.5 rounded-lg font-bold text-white" style={{ background: '#DC2626' }}>Reintentar</button>
+        </div>
+      )}
+      {(bags !== null && equip !== null && tot > 0 && !bagErr && !eqFail) && (
         <div className="mt-2 mb-1">
           <div className="flex items-baseline justify-between">
             <p className="text-[13px] font-extrabold" style={{ color: '#0F172A' }}>Cargado {ok} de {tot}</p>
@@ -111,8 +140,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
       <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Package className="inline w-3 h-3 mr-1" />Maletas</p>
       {bags === null ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Cargando…</p>
         : !LAUNDRY_ENABLED ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Lavandería no está conectada.</p>
-        : bagErr ? <p className="text-[12px]" style={{ color: '#B91C1C' }}>{bagErr}</p>
-        : bags.length === 0 ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Ninguna casa de hoy tiene maletas asignadas.</p>
+        : (bags.length === 0 && !bagErr) ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Ninguna casa de hoy tiene maletas asignadas.</p>
         : bags.map(b => { const c = chip(b); return (
           <div key={b.id} className="flex items-center gap-3 py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#E6F6F7', color: TEAL }}><Package className="w-4 h-4" /></div>
@@ -127,7 +155,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
       {/* Kits y herramientas */}
       <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Wrench className="inline w-3 h-3 mr-1" />Kits y herramientas</p>
       {equip === null ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Cargando…</p>
-        : equip.length === 0 ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Tus casas de hoy no tienen equipamiento asignado.</p>
+        : (equip.length === 0 && !eqFail) ? <p className="text-[12px]" style={{ color: '#94A3B8' }}>Tus casas de hoy no tienen equipamiento asignado.</p>
         : equip.map(e => { const on = checked.has(e.code.toUpperCase()); return (
           <button key={e.code} onClick={() => setChecked(e.code, !on)} className="w-full flex items-center gap-3 py-2 text-left" style={{ borderTop: '1px solid #F1F5F9' }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#F3F0FF', color: '#7C3AED' }}><Wrench className="w-4 h-4" /></div>
