@@ -60,6 +60,10 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
   const missingBags = (bags || []).filter(b => !loadedBag(b)).length
   const missingEq = (equip || []).filter(e => !checked.has(e.code.toUpperCase())).length
   const missing = missingBags + missingEq
+  const totBags = (bags || []).length, totEq = (equip || []).length
+  const okBags = totBags - missingBags, okEq = totEq - missingEq
+  const tot = totBags + totEq, ok = okBags + okEq
+  const pct = tot ? Math.round((ok / tot) * 100) : 0
 
   const chip = (b: any) => {
     const st = b.cycle?.state || b.state || 'sin estado'
@@ -80,6 +84,28 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
         )}
       </div>
       <p className="text-[12px] mb-1" style={{ color: '#64748B' }}>Lo asignado a tus casas de hoy. Escanea para cargarlo.</p>
+
+      {(bags !== null && equip !== null && tot > 0) && (
+        <div className="mt-2 mb-1">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[13px] font-extrabold" style={{ color: '#0F172A' }}>Cargado {ok} de {tot}</p>
+            <p className="text-[12px] font-bold" style={{ color: ok === tot ? '#15803D' : '#64748B' }}>{pct}%</p>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden mt-1" style={{ background: '#E2E8F0' }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: ok === tot ? '#16A34A' : TEAL }} />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <div className="flex-1 rounded-xl px-3 py-2" style={{ background: '#F1F5F9' }}>
+              <p className="text-[10px] font-bold uppercase" style={{ color: '#64748B' }}>Maletas</p>
+              <p className="text-[15px] font-extrabold" style={{ color: okBags === totBags ? '#15803D' : '#0F172A' }}>{okBags}<span className="text-[12px] font-bold" style={{ color: '#94A3B8' }}> / {totBags}</span></p>
+            </div>
+            <div className="flex-1 rounded-xl px-3 py-2" style={{ background: '#F1F5F9' }}>
+              <p className="text-[10px] font-bold uppercase" style={{ color: '#64748B' }}>Kits y herramientas</p>
+              <p className="text-[15px] font-extrabold" style={{ color: okEq === totEq ? '#15803D' : '#0F172A' }}>{okEq}<span className="text-[12px] font-bold" style={{ color: '#94A3B8' }}> / {totEq}</span></p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Maletas */}
       <p className="text-[10px] font-bold uppercase tracking-wide mt-3 mb-1" style={{ color: '#64748B' }}><Package className="inline w-3 h-3 mr-1" />Maletas</p>
