@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
       const shift = (n) => { const d = new Date(effectiveDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
       const formula = `OR(IS_SAME({Date},'${shift(-1)}','day'),IS_SAME({Date},'${effectiveDate}','day'),IS_SAME({Date},'${shift(1)}','day'))`;
-      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'OpenComments', 'VideoInicialURLs', 'VideoInicial', 'ClosingMediaURLs', 'Photos & Videos', 'StoragePhotoURL', 'StoragePhoto', 'Cleaning Type Text', 'Cleaning Type', 'Property'];
+      const FIELDS = ['Date', 'Assigned Staff', 'FrontView', 'Address', 'Property Text', 'Status', 'Equipment', 'Scheduled Time', 'Start Time', 'End Time', 'OpenComments', 'VideoInicialURLs', 'VideoInicial', 'ClosingMediaURLs', 'Photos & Videos', 'StoragePhotoURL', 'StoragePhoto', 'Cleaning Type Text', 'Cleaning Type', 'Property'];
       const q = `&filterByFormula=${encodeURIComponent(formula)}` + FIELDS.map(f => `&fields[]=${encodeURIComponent(f)}`).join('');
       try {
         const fast = await fetchAll(q);
@@ -143,6 +143,7 @@ export default async function handler(req, res) {
         address, status: f['Status'] || 'Programmed',
         date: rawDate || null, formattedDate,
         scheduledTime: f['Scheduled Time'] || null,
+        startTime: f['Start Time'] || null, endTime: f['End Time'] || null,
         notes: f['OpenComments'] || '',
         staffList, staffIds: shown, staffNames, equipmentCount, attachments, cleaningType, propertyId,
         hasEntry, hasExit, hasStorage, incidentCount: incByCleaning[record.id] || 0, ruptureCount: invByCleaning[record.id] || 0,
