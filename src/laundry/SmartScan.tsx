@@ -132,7 +132,8 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
             ? <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Confirmar y cargar esta</Big></div>
             : <>
               {(st === 'Clean' || !st) && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Cargar al transporte</Big></div>}
-              {st === 'In Use' && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => startMarkDirty(info)}>Marcar sucia</Big></div>}
+              {st === 'In Use' && (info.bag.qty || 1) <= 1 && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => startMarkDirty(info)}>Marcar sucia</Big></div>}
+              {st === 'In Use' && (info.bag.qty || 1) > 1 && <div className="flex-[2] text-[12px] font-semibold text-center py-3" style={{ color: L.slate }}>Ya está cargada. Se marca sucia al cerrar la casa.</div>}
             </>}
         </div>
       </div>
