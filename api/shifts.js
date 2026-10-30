@@ -2,7 +2,7 @@
 //   GET  /api/shifts?date=YYYY-MM-DD                      -> turnos de ese dia
 //   POST /api/shifts {action:'start',  date, people:[{staffId,name,initials,start}], registeredBy}
 //   POST /api/shifts {action:'update', id, start?, end?}  -> corrige horas de una fila
-//   POST /api/shifts {action:'close',  rows:[{id,start,end}]}  -> fija horas y marca Cerrado
+//   POST /api/shifts {action:'close',  rows:[{id,start,end,notes?}], by}  -> fija horas y marca Cerrado
 //   POST /api/shifts {action:'reopen', ids:[...]}          -> quita Cerrado y Fin (por si se cerro por error)
 // Campos de Airtable: Turno, Fecha, Persona (link a Staff), Inicio, Fin, "Registrado por", Cerrado, Notas
 const AIRTABLE_BASE = 'appBwnoxgyIXILe6M';
@@ -11,6 +11,11 @@ const TABLE = 'Turnos';
 const URL_BASE = `https://api.airtable.com/v0/${AIRTABLE_BASE}/${encodeURIComponent(TABLE)}`;
 const H = { 'Authorization': `Bearer ${AIRTABLE_TOKEN}`, 'Content-Type': 'application/json' };
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+// Bitacora en el campo existente "Notas": "Cerrado por X · fecha hora" / "Reabierto por Y · ..." (se conserva lo anterior, max ~800 chars)
+const stamp = () => new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const appendLog = (prev, line) => (String(prev || '') ? String(prev) + '\n' : '') + line;
+const clip = (t) => String(t).slice(-800);
+const cleanBy = (b) => String(b || 'alguien').replace(/[\r\n]/g, ' ').slice(0, 60);
 const isIso = (t) => typeof t === 'string' && !isNaN(new Date(t).getTime());
 
 const shape = (r) => ({
@@ -22,6 +27,7 @@ const shape = (r) => ({
   closed: !!r.fields['Cerrado'],
   registeredBy: r.fields['Registrado por'] || '',
   label: r.fields['Turno'] || '',
+  notes: r.fields['Notas'] || '',
 });
 
 async function listDay(date) {
@@ -81,23 +87,24 @@ export default async function handler(req, res) {
     }
 
     if (action === 'close') {
-      const { rows } = body;
+      const { rows, by } = body;
       if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'datos invalidos' });
       const valid = rows.filter(x => /^rec[A-Za-z0-9]{14}$/.test(x?.id || '') && isIso(x.start) && isIso(x.end));
       if (valid.length !== rows.length) return res.status(400).json({ error: 'horas invalidas' });
       for (const x of valid) if (new Date(x.end) < new Date(x.start)) return res.status(400).json({ error: 'El fin es antes del inicio' });
       for (let i = 0; i < valid.length; i += 10) {
-        const chunk = valid.slice(i, i + 10).map(x => ({ id: x.id, fields: { 'Inicio': new Date(x.start).toISOString(), 'Fin': new Date(x.end).toISOString(), 'Cerrado': true } }));
+        const chunk = valid.slice(i, i + 10).map(x => ({ id: x.id, fields: { 'Inicio': new Date(x.start).toISOString(), 'Fin': new Date(x.end).toISOString(), 'Cerrado': true, 'Notas': clip(appendLog(x.notes, `Cerrado por ${cleanBy(by)} · ${stamp()}`)) } }));
         const r = await fetch(URL_BASE, { method: 'PATCH', headers: H, body: JSON.stringify({ records: chunk }) });
         if (!r.ok) throw new Error(`Airtable ${r.status}: ${(await r.text()).slice(0, 300)}`);
       }
       return res.status(200).json({ ok: true });
     }
     if (action === 'reopen') {
-      const { ids } = body;
+      const { ids, by, notes } = body;
       if (!Array.isArray(ids) || !ids.length || !ids.every(i => /^rec[A-Za-z0-9]{14}$/.test(i || ''))) return res.status(400).json({ error: 'ids invalidos' });
+      const prevNotes = (notes && typeof notes === 'object') ? notes : {};
       for (let i = 0; i < ids.length; i += 10) {
-        const chunk = ids.slice(i, i + 10).map(id => ({ id, fields: { 'Cerrado': false, 'Fin': null } }));
+        const chunk = ids.slice(i, i + 10).map(id => ({ id, fields: { 'Cerrado': false, 'Fin': null, 'Notas': clip(appendLog(prevNotes[id], `Reabierto por ${cleanBy(by)} · ${stamp()}`)) } }));
         const r = await fetch(URL_BASE, { method: 'PATCH', headers: H, body: JSON.stringify({ records: chunk }) });
         if (!r.ok) throw new Error(`Airtable ${r.status}: ${(await r.text()).slice(0, 300)}`);
       }
