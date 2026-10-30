@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import BagsPanel, { BagsPanelHandle } from '../laundry/BagsPanel'
+import { STATUS_STYLE, typeColors } from './CleaningRow'
 import {
   ArrowLeft, Home, Play, BarChart2, Flag, Camera,
   Star, BookOpen, Package, CheckCircle2,
@@ -16,11 +17,11 @@ const storageClient = createClient(
 
 // ─── Design System ───────────────────────────────────────────────────────────
 const C = {
-  teal:      '#00BCD4',
-  tealDark:  '#0097A7',
-  tealLight: '#E0F7FA',
-  tealMid:   '#B2EBF2',
-  green:     '#00C853',
+  teal:      '#0E7C86',
+  tealDark:  '#0A5C63',
+  tealLight: '#E6F6F7',
+  tealMid:   '#BFE6E9',
+  green:     '#16A34A',
   amber:     '#F59E0B',
   red:       '#EF4444',
   ink:       '#0F172A',
@@ -150,26 +151,26 @@ const saveUrlToAirtable = (cleaningId: string, type: string, publicUrl: string, 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-1.5 h-6 rounded-full" style={{ background: C.teal }} />
-      <span className="text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: C.teal }}>{children}</span>
+    <div className="flex items-center gap-2 mb-3 px-1">
+      <span className="text-[11px] font-bold tracking-[0.14em] uppercase" style={{ color: C.slate }}>{children}</span>
+      <div className="flex-1 h-px" style={{ background: C.border }} />
     </div>
   )
 }
 
 function StepBadge({ n, done }: { n: number; done?: boolean }) {
   return (
-    <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
       style={{ background: done ? C.green : C.teal }}>
       {done
         ? <CheckCircle2 className="w-5 h-5 text-white" />
-        : <span className="text-white font-black text-[15px]">{n}</span>}
+        : <span className="text-white font-bold text-[14px]">{n}</span>}
     </div>
   )
 }
 
 function StepTitle({ children }: { children: React.ReactNode }) {
-  return <p className="font-black text-[16px] mb-1" style={{ color: C.ink, fontFamily: 'Poppins, sans-serif' }}>{children}</p>
+  return <p className="font-bold text-[15px] mb-1" style={{ color: C.ink, fontFamily: 'Poppins, sans-serif' }}>{children}</p>
 }
 
 function StepSub({ children }: { children: React.ReactNode }) {
@@ -190,7 +191,7 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
     return acc
   }, {})
   return (
-    <div className="rounded-3xl shadow-sm overflow-hidden" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.white, border: `1px solid ${C.border}` }}>
       <div className="px-5 py-4" style={{ background: C.tealLight }}>
         <div className="flex items-center justify-between">
           <span className="font-black text-[13px]" style={{ color: C.tealDark }}>CHECKLIST DE LIMPIEZA</span>
@@ -466,10 +467,10 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
   ]
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${C.tealDark}, ${C.teal})` }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
-        <p className="text-white/70 font-semibold text-[13px] tracking-wide">Cargando limpieza...</p>
+        <div className="w-10 h-10 border-[3px] rounded-full animate-spin" style={{ borderColor: C.border, borderTopColor: C.teal }} />
+        <p className="font-semibold text-[13px] tracking-wide" style={{ color: C.muted }}>Cargando limpieza...</p>
       </div>
     </div>
   )
@@ -486,59 +487,59 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
       )}
 
       {/* STICKY HEADER */}
-      <div className="sticky top-0 z-50 shadow-lg" style={{ background: `linear-gradient(135deg, ${C.tealDark} 0%, ${C.teal} 100%)` }}>
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-4 pt-10 pb-3">
-          <button onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-[13px] shadow-md active:scale-95 transition-all"
-            style={{ background: 'rgba(255,255,255,0.15)', color: 'white', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <ArrowLeft className="w-4 h-4" strokeWidth={2.5} /> Volver
-          </button>
-          <div className="text-right max-w-[55%]">
-            <p className="text-white font-black text-[14px] leading-tight truncate tracking-tight">
-              {(details?.propertyText || 'ShineUP').toUpperCase()}
-            </p>
-            <p className="text-white/60 text-[10px] font-semibold uppercase tracking-widest mt-0.5 truncate">
-              {details?.cleaningTypeText || 'Standard Turnover'}
-            </p>
+      <div className="sticky top-0 z-50 bg-white" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <div className="mx-auto" style={{ maxWidth: 720 }}>
+          <div className="flex items-center gap-3 px-4 pt-10 pb-3">
+            <button onClick={onBack} aria-label="Volver"
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-all"
+              style={{ border: `1px solid ${C.border}`, color: C.slate }}>
+              <ArrowLeft className="w-4 h-4" strokeWidth={2.5} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-[16px] leading-tight truncate" style={{ color: C.ink }}>{details?.propertyText || 'ShineUP'}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                {details?.cleaningTypeText && (() => { const [, tbg, tfg] = typeColors(details.cleaningTypeText); return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md truncate" style={{ background: tbg, color: tfg }}>{details.cleaningTypeText}</span>
+                ) })()}
+              </div>
+            </div>
+            {(() => {
+              const st = isDone ? 'Done' : isInProgress ? 'In Progress' : (details?.status === 'Opened' ? 'Opened' : 'Programmed')
+              const sty = STATUS_STYLE[st]
+              return <span className="shrink-0 text-[10.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: sty.bg, color: sty.fg }}>{st}</span>
+            })()}
           </div>
-        </div>
 
-        {/* Progress bar */}
-        <div className="px-4 pb-2">
-          <div className="flex justify-between mb-1">
-            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Progreso</span>
-            <span className="text-[10px] font-black text-white">{doneTasks}/{totalTasks} tareas</span>
+          {/* Progreso */}
+          <div className="px-4 pb-2.5 flex items-center gap-3">
+            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#EEF2F6' }}>
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: progress === 100 ? C.green : C.teal }} />
+            </div>
+            <span className="text-[11px] font-semibold shrink-0" style={{ color: C.slate }}>{doneTasks}/{totalTasks} tareas</span>
           </div>
-          <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.2)' }}>
-            <div className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${progress}%`, background: progress === 100 ? '#00E676' : 'white' }} />
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="grid grid-cols-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-          {tabs.map(({ key, label, Icon }) => {
-            const active = activeTab === key
-            return (
-              <button key={key} onClick={() => scrollTo(key)}
-                className="flex flex-col items-center py-3 transition-all relative">
-                <Icon className="w-4 h-4 mb-1" style={{ color: active ? 'white' : 'rgba(255,255,255,0.35)', strokeWidth: active ? 2.5 : 1.5 }} />
-                <span className="text-[9px] font-black tracking-widest" style={{ color: active ? 'white' : 'rgba(255,255,255,0.35)' }}>{label}</span>
-                {active && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full" style={{ background: '#00E676' }} />}
-              </button>
-            )
-          })}
+          {/* Pestañas */}
+          <div className="grid grid-cols-4">
+            {tabs.map(({ key, label }) => {
+              const active = activeTab === key
+              return (
+                <button key={key} onClick={() => scrollTo(key)} className="py-3 relative">
+                  <span className="text-[11px] font-bold tracking-widest" style={{ color: active ? C.teal : C.muted }}>{label}</span>
+                  {active && <div className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full" style={{ background: C.teal }} />}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
       {/* CONTENT */}
-      <div className="px-4 pt-6 pb-28 space-y-6">
+      <div className="px-4 pt-5 pb-28 space-y-5 mx-auto" style={{ maxWidth: 720 }}>
 
         {/* ── DETALLE ──────────────────────────────────── */}
         <div ref={detalleRef}>
           <SectionLabel>Detalle</SectionLabel>
-          <div className="rounded-3xl overflow-hidden shadow-sm" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.white, border: `1px solid ${C.border}` }}>
 
             {/* Property header */}
             <div className="px-5 py-4" style={{ background: `linear-gradient(135deg, ${C.tealLight}, ${C.white})` }}>
@@ -642,7 +643,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
         {/* ── INICIO ──────────────────────────────────── */}
         <div ref={inicioRef} style={{ opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
           <SectionLabel>Inicio</SectionLabel>
-          <div className="rounded-3xl overflow-hidden shadow-sm space-y-0" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden space-y-0" style={{ background: C.white, border: `1px solid ${C.border}` }}>
 
             {/* Step 1 - Video */}
             <div className="p-5">
@@ -762,8 +763,8 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                   <StepSub>Registra la hora de inicio</StepSub>
                   {!isInProgress && !isDone ? (
                     <button onClick={handleStart} disabled={startingCleaning}
-                      className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2.5 shadow-lg active:scale-95 transition-all"
-                      style={{ background: `linear-gradient(135deg, #00C853, #00E676)` }}>
+                      className="w-full py-4 rounded-2xl text-white font-bold text-[15px] flex items-center justify-center gap-2.5 active:scale-95 transition-all"
+                      style={{ background: C.teal }}>
                       {startingCleaning ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><Play className="w-5 h-5" fill="white" /> EMPEZAR LIMPIEZA</>}
                     </button>
                   ) : (
@@ -786,7 +787,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
           <SectionLabel>Reporte</SectionLabel>
 
           {/* Foto del Almacén */}
-          <div className="rounded-3xl overflow-hidden shadow-sm mb-4 p-5" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden mb-4 p-5" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="font-black text-[14px]" style={{ color: C.ink }}>Foto del Almacén</p>
@@ -829,7 +830,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
           </div>
 
           {/* Rupturas de inventario */}
-          <div className="rounded-3xl overflow-hidden shadow-sm mb-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden mb-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
               <div>
                 <p className="font-black text-[14px]" style={{ color: C.ink }}>Rupturas de inventario</p>
@@ -872,7 +873,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
           </div>
 
           {/* Incidentes */}
-          <div className="rounded-3xl overflow-hidden shadow-sm" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
               <div>
                 <p className="font-black text-[14px]" style={{ color: C.ink }}>Incidentes</p>
@@ -924,7 +925,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
         {/* ── CIERRE ──────────────────────────────────── */}
         <div ref={cierreRef} style={{ opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
           <SectionLabel>Cierre</SectionLabel>
-          <div className="rounded-3xl overflow-hidden shadow-sm p-5 space-y-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl overflow-hidden p-5 space-y-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <p className="font-semibold text-[14px] leading-relaxed" style={{ color: C.slate }}>
               Verifica que todo esté conforme al Book antes de terminar.
             </p>
@@ -973,8 +974,8 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
                 'Subir fotos / videos'}
             </button>
             <button onClick={handleFinish} disabled={!isInProgress || finishing || isDone}
-              className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2.5 shadow-lg active:scale-95 transition-all"
-              style={{ background: isDone ? C.green : isInProgress ? `linear-gradient(135deg, #EF4444, #F87171)` : C.muted }}>
+              className="w-full py-4 rounded-2xl text-white font-bold text-[15px] flex items-center justify-center gap-2.5 active:scale-95 transition-all"
+              style={{ background: isDone ? C.green : isInProgress ? '#DC2626' : C.muted }}>
               {isDone ? <><CheckCircle2 className="w-5 h-5" /> LIMPIEZA TERMINADA</>
                 : finishing ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 : '🏁 TERMINAR LIMPIEZA'}
@@ -986,7 +987,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
       {/* ── SIZE WARNING MODAL ── */}
       {videoSizeWarning > 0 && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center px-6" style={{ background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl" style={{ background: C.white }}>
+          <div className="w-full max-w-xs rounded-2xl overflow-hidden shadow-2xl" style={{ background: C.white }}>
             <div className="px-5 pt-5 pb-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-2xl">⚠️</span>
@@ -1019,7 +1020,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
       {/* ── INCIDENT DETAIL MODAL ── */}
       {selectedIncident && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setSelectedIncident(null)}>
-          <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
             {selectedIncident.photoUrls && selectedIncident.photoUrls.length > 0 && (
               <div className="w-full h-48 bg-slate-100">
                 <img src={selectedIncident.photoUrls[0]} alt="foto incidente" className="w-full h-full object-cover" />
@@ -1051,7 +1052,7 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
       {/* ── INVENTORY DETAIL MODAL ── */}
       {selectedInventory && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setSelectedInventory(null)}>
-          <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: C.white }} onClick={e => e.stopPropagation()}>
             {selectedInventory.photoUrls && selectedInventory.photoUrls.length > 0 && (
               <div className="w-full h-48 bg-slate-100">
                 <img src={selectedInventory.photoUrls[0]} alt="foto inventario" className="w-full h-full object-cover" />
