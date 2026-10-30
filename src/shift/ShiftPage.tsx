@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Play, Square, ScanLine, Package, Users, AlertTriangle, Check } from 'lucide-react'
-import { Shift, Person, fmtTime, hoursText, toInput, fromInput, closeShifts } from './shiftApi'
+import { Shift, Person, fmtTime, hoursText, toInput, fromInput, closeShifts, lastClosedBy } from './shiftApi'
 import AssignedLoad from './AssignedLoad'
 
 const TEAL = '#0E7C86'
@@ -120,6 +120,9 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
       {/* Lista de todo lo asignado (maletas, kits, herramientas) + escáner de carga */}
       <AssignedLoad cleanings={todayCleanings} refreshKey={refreshKey} onScan={onScanLoad} />
 
+      {allClosed && shifts && lastClosedBy(shifts) && (
+        <p className="text-center text-[12px] font-bold" style={{ color: '#64748B' }}>Cerrado por {lastClosedBy(shifts)}</p>
+      )}
       {allClosed && (
         <button onClick={onReopen} className="w-full py-3 rounded-2xl font-bold text-[13px]" style={{ border: '1.5px solid #CBD5E1', color: '#475569' }}>Reabrir turno (si se cerró por error)</button>
       )}
@@ -131,8 +134,8 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
 }
 
 // ── Cerrar turno: horas por persona + aviso (no bloquea) ──
-export function CloseShiftPage({ date, shifts, team, inProgress, onBack, onDone, onToast }: {
-  date: string; shifts: Shift[]; team: Person[]; inProgress: string[]
+export function CloseShiftPage({ date, shifts, team, inProgress, closedBy, onBack, onDone, onToast }: {
+  closedBy: string; date: string; shifts: Shift[]; team: Person[]; inProgress: string[]
   onBack: () => void; onDone: () => void; onToast: (m: string, t?: 'ok' | 'err') => void
 }) {
   const open = shifts.filter(s => !s.closed)
@@ -140,11 +143,11 @@ export function CloseShiftPage({ date, shifts, team, inProgress, onBack, onDone,
   const [endHm, setEndHm] = useState<Record<string, string>>(() => Object.fromEntries(open.map(s => [s.id, toInput()])))
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
-  const rows = open.map(s => ({ id: s.id, start: fromInput(date, startHm[s.id]), end: fromInput(date, endHm[s.id]) }))
+  const rows = open.map(s => ({ id: s.id, start: fromInput(date, startHm[s.id]), end: fromInput(date, endHm[s.id]), notes: s.notes || '' }))
   const bad = rows.some(r => new Date(r.end) < new Date(r.start))
   const save = async () => {
     setBusy(true)
-    const r = await closeShifts(rows)
+    const r = await closeShifts(rows, closedBy)
     setBusy(false)
     if (r.ok) { onToast('Turno cerrado ✓'); onDone() } else onToast(`No se pudo cerrar: ${r.error}`, 'err')
   }

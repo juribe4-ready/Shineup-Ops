@@ -1,5 +1,5 @@
 // Cliente de /api/shifts (tabla "Turnos"). Nunca lanza: devuelve { ok:false, error } para que la app siga funcionando sin turnos.
-export interface Shift { id: string; staffId: string | null; date: string | null; start: string | null; end: string | null; closed: boolean; registeredBy: string; label: string }
+export interface Shift { id: string; staffId: string | null; date: string | null; start: string | null; end: string | null; closed: boolean; registeredBy: string; label: string; notes?: string }
 export interface Person { staffId: string; name: string; initials: string }
 type Res<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -16,8 +16,10 @@ const post = <T,>(body: any) => call<T>({ method: 'POST', headers: { 'Content-Ty
 export const getShifts = (date: string) => call<{ shifts: Shift[] }>({ method: 'GET' }, `?date=${date}`)
 export const startShifts = (date: string, people: { staffId: string; name: string; initials: string; start: string }[], registeredBy: string) =>
   post<{ shifts: Shift[] }>({ action: 'start', date, people, registeredBy })
-export const reopenShifts = (ids: string[]) => post<{ ok: boolean }>({ action: 'reopen', ids })
-export const closeShifts = (rows: { id: string; start: string; end: string }[]) => post<{ ok: boolean }>({ action: 'close', rows })
+export const reopenShifts = (shifts: Shift[], by: string) => post<{ ok: boolean }>({ action: 'reopen', ids: shifts.map(x => x.id), by, notes: Object.fromEntries(shifts.map(x => [x.id, x.notes || ''])) })
+export const closeShifts = (rows: { id: string; start: string; end: string; notes?: string }[], by: string) => post<{ ok: boolean }>({ action: 'close', rows, by })
+// Ultima linea "Cerrado por X · ..." de la bitacora (para mostrar quien cerro)
+export const lastClosedBy = (shifts: Shift[]) => { for (const s of shifts) { const m = [...String(s.notes || '').matchAll(/Cerrado por (.+?) · ([^\n]+)/g)].pop(); if (m) return `${m[1]} · ${m[2]}` } return '' }
 
 // ── helpers de hora (hora local del teléfono) ──
 export const fmtTime = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '—'
