@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Play, Square, ScanLine, Package, Users, AlertTriangle, Check } from 'lucide-react'
 import { Shift, Person, fmtTime, hoursText, toInput, fromInput, closeShifts } from './shiftApi'
+import AssignedLoad from './AssignedLoad'
 
 const TEAL = '#0E7C86'
 const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16 } as const
@@ -46,10 +47,10 @@ export function RollCallSheet({ title, sub, team, busy, confirmLabel, onConfirm,
 }
 
 // ── Pestaña Turno ──
-export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, missing, onAddMissing, onStart, onScanLoad, onClose, onReload }: {
+export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, missing, onAddMissing, onStart, onScanLoad, onClose, onReload, onReopen, refreshKey }: {
   date: string; shifts: Shift[] | null; shiftsError: string; team: Person[]; missing: Person[]; onAddMissing: () => void
-  todayCleanings: { id: string; propertyText?: string; status?: string }[]
-  onStart: () => void; onScanLoad: () => void; onClose: () => void; onReload: () => void
+  todayCleanings: { id: string; propertyId?: string | null; propertyText?: string; status?: string }[]
+  onStart: () => void; onScanLoad: () => void; onClose: () => void; onReload: () => void; onReopen: () => void; refreshKey: number
 }) {
   const [, tick] = useState(0)
   useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30000); return () => clearInterval(t) }, [])
@@ -116,13 +117,12 @@ export function ShiftTab({ date, shifts, shiftsError, team, todayCleanings, miss
         </>
       )}
 
-      {/* Carga del transporte: usa el escáner de lavandería que ya existe */}
-      <div className="p-4" style={card}>
-        <p className="font-bold text-[14px]" style={{ color: '#0F172A' }}>Cargar transporte</p>
-        <p className="text-[12px] mb-2" style={{ color: '#64748B' }}>Maletas, kits y herramientas. Escanea cada una.</p>
-        <button onClick={onScanLoad} className="w-full py-2.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2" style={{ border: `1.5px solid ${TEAL}`, color: TEAL }}><ScanLine className="w-4 h-4" /><Package className="w-4 h-4" />Escanear carga</button>
-      </div>
+      {/* Lista de todo lo asignado (maletas, kits, herramientas) + escáner de carga */}
+      <AssignedLoad cleanings={todayCleanings} refreshKey={refreshKey} onScan={onScanLoad} />
 
+      {allClosed && (
+        <button onClick={onReopen} className="w-full py-3 rounded-2xl font-bold text-[13px]" style={{ border: '1.5px solid #CBD5E1', color: '#475569' }}>Reabrir turno (si se cerró por error)</button>
+      )}
       {shifts && shifts.length > 0 && !allClosed && (
         <button onClick={onClose} className="w-full py-3.5 rounded-2xl font-bold text-[14px] text-white flex items-center justify-center gap-2" style={{ background: '#DC2626' }}><Square className="w-4 h-4" />Cerrar turno</button>
       )}
@@ -139,6 +139,7 @@ export function CloseShiftPage({ date, shifts, team, inProgress, onBack, onDone,
   const [startHm, setStartHm] = useState<Record<string, string>>(() => Object.fromEntries(open.map(s => [s.id, toInput(s.start)])))
   const [endHm, setEndHm] = useState<Record<string, string>>(() => Object.fromEntries(open.map(s => [s.id, toInput()])))
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const rows = open.map(s => ({ id: s.id, start: fromInput(date, startHm[s.id]), end: fromInput(date, endHm[s.id]) }))
   const bad = rows.some(r => new Date(r.end) < new Date(r.start))
   const save = async () => {
@@ -184,7 +185,18 @@ export function CloseShiftPage({ date, shifts, team, inProgress, onBack, onDone,
         </div>
         <div className="fixed left-0 right-0 bottom-0 p-4" style={{ background: 'linear-gradient(transparent, #F8FAFC 40%)' }}>
           <div className="mx-auto" style={{ maxWidth: 560 }}>
-            <button disabled={busy || bad} onClick={save} className="w-full py-3.5 rounded-2xl font-bold text-[14px] text-white flex items-center justify-center gap-2" style={{ background: '#DC2626', opacity: busy || bad ? 0.5 : 1 }}><Square className="w-4 h-4" />{busy ? 'Cerrando…' : 'Cerrar turno'}</button>
+            {!confirming ? (
+              <button disabled={busy || bad} onClick={() => setConfirming(true)} className="w-full py-3.5 rounded-2xl font-bold text-[14px] text-white flex items-center justify-center gap-2" style={{ background: '#DC2626', opacity: bad ? 0.5 : 1 }}><Square className="w-4 h-4" />Cerrar turno</button>
+            ) : (
+              <div className="rounded-2xl p-3" style={{ background: '#fff', border: '1.5px solid #FCA5A5' }}>
+                <p className="text-[13px] font-bold" style={{ color: '#0F172A' }}>¿Cerrar el turno de {open.length} persona{open.length === 1 ? '' : 's'}?</p>
+                <p className="text-[11.5px] mb-2" style={{ color: '#64748B' }}>Queda guardado con las horas de arriba. Si fue un error, se puede reabrir desde la pestaña Turno.</p>
+                <div className="flex gap-2">
+                  <button disabled={busy} onClick={() => setConfirming(false)} className="flex-1 py-3 rounded-xl font-bold text-[13px]" style={{ border: '1.5px solid #E2E8F0', color: '#475569' }}>Volver</button>
+                  <button disabled={busy} onClick={save} className="flex-[1.5] py-3 rounded-xl font-bold text-[13px] text-white" style={{ background: '#DC2626' }}>{busy ? 'Cerrando…' : 'Sí, cerrar'}</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

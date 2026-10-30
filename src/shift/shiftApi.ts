@@ -16,6 +16,7 @@ const post = <T,>(body: any) => call<T>({ method: 'POST', headers: { 'Content-Ty
 export const getShifts = (date: string) => call<{ shifts: Shift[] }>({ method: 'GET' }, `?date=${date}`)
 export const startShifts = (date: string, people: { staffId: string; name: string; initials: string; start: string }[], registeredBy: string) =>
   post<{ shifts: Shift[] }>({ action: 'start', date, people, registeredBy })
+export const reopenShifts = (ids: string[]) => post<{ ok: boolean }>({ action: 'reopen', ids })
 export const closeShifts = (rows: { id: string; start: string; end: string }[]) => post<{ ok: boolean }>({ action: 'close', rows })
 
 // ── helpers de hora (hora local del teléfono) ──
