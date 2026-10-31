@@ -25,7 +25,7 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
   const [data, setData] = useState<Payload | null>(null)
   const [declare, setDeclare] = useState<PBag[] | null>(null)
   const resolver = useRef<((ok: boolean) => void) | null>(null)
-  const [undoing, setUndoing] = useState<string | null>(null)
+  const [open, setOpen] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     if (!LAUNDRY_ENABLED || !propertyId) return
@@ -62,7 +62,6 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
           const n = Math.max(1, b.qty)
           const inUse = b.cycle?.state === 'In Use'
           const out = b.cycle?.unitsOut || []
-          const anyLoaded = inUse && !declared
           return (
             <div key={b.id} className="rounded-2xl px-3 py-2.5" style={{ background: '#F8FAFC', border: `1px solid ${L.border}` }}>
               <p className="font-bold text-[13px]" style={{ color: L.ink }}>{b.name}{n > 1 ? ` · ${n} maletas` : ''}</p>
@@ -79,16 +78,21 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
                   )
                 })}
               </div>
-              {anyLoaded && (
-                <button disabled={undoing === b.id} onClick={async () => {
-                  if (!window.confirm(`¿Descargar ${b.name}? Se deshace la carga de ${n > 1 ? 'sus ' + n + ' maletas' : 'la maleta'} y podrás cargarla de nuevo.`)) return
-                  setUndoing(b.id)
-                  try { await lPost('undoLoad', { bagId: b.id }); onToast('Maletas descargadas ✓ — puedes volver a cargarlas'); await load() }
-                  catch (e: any) { onToast(e.message || 'No se pudo descargar', 'err') } finally { setUndoing(null) }
-                }} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'white', color: L.red, border: `1.5px solid ${L.border}` }}>
-                  ↩ Descargar y volver a cargar
-                </button>
-              )}
+              <button onClick={() => setOpen(o => ({ ...o, [b.id]: !o[b.id] }))} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'white', color: L.teal, border: `1.5px solid ${L.border}` }}>
+                {open[b.id] ? '▾ Ocultar contenido' : '👁 Ver qué trae'}
+              </button>
+              {open[b.id] && (() => {
+                const fin = (b.cycle as any)?.finalContent?.counts as Record<string, number> | undefined
+                const counts = fin && Object.keys(fin).length ? fin : b.standard
+                const rows = Object.entries(counts || {}).filter(([, v]) => v > 0)
+                return (
+                  <div className="mt-2 rounded-xl px-3 py-2" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: L.muted }}>{fin && Object.keys(fin).length ? 'Lo que dejó lavandería' : 'Estándar de la casa'}</p>
+                    {rows.length === 0 && <p className="text-[12px]" style={{ color: L.muted }}>Esta maleta no tiene contenido definido.</p>}
+                    {rows.map(([k, v]) => <div key={k} className="flex justify-between text-[12px] py-1" style={{ borderTop: '1px solid #F1F5F9' }}><span>{k}</span><b>{v}</b></div>)}
+                  </div>
+                )
+              })()}
             </div>
           )
         })}
