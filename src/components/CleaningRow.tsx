@@ -93,7 +93,7 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
               : <span className="text-[10px]" style={{ color: '#CBD5E1' }}>Sin staff</span>}
           </div>
           {ld.bags > 0 && (
-            <Chip ok={ld.bagsLoaded === ld.bags} title="Maletas cargadas"><Luggage className="w-3 h-3" />{ld.bagsLoaded} de {ld.bags} cargadas</Chip>
+            <Chip ok={ld.bagsLoaded === ld.bags} title="Maletas cargadas"><Luggage className="w-3 h-3" />{ld.bagsLoaded}/{ld.bags}</Chip>
           )}
           {eq > 0 && (
             <Chip ok={ld.kits > 0 && ld.kitsLoaded === ld.kits} title="Kits y herramientas"><Hammer className="w-3 h-3" />{ld.kits > 0 ? `${ld.kitsLoaded}/${ld.kits}` : eq}</Chip>
@@ -110,7 +110,7 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
   )
 })
 function Chip({ children, ok, bad, title }: { children: React.ReactNode; ok?: boolean; bad?: boolean; title: string }) {
-  return <span title={title} className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: bad ? '#FEE2E2' : ok ? '#DCFCE7' : '#F1F5F9', color: bad ? '#B91C1C' : ok ? '#15803D' : '#475569' }}>{children}</span>
+  return <span title={title} className="flex items-center gap-1 whitespace-nowrap shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ background: bad ? '#FEE2E2' : ok ? '#DCFCE7' : '#F1F5F9', color: bad ? '#B91C1C' : ok ? '#15803D' : '#475569' }}>{children}</span>
 }
 // Hecho = verde; pendiente = gris claro
 function Ico({ on, title, children }: { on: boolean; title: string; children: React.ReactNode }) {
