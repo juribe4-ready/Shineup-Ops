@@ -6,7 +6,7 @@ import { Big, BlobPhotos, Counter, L, Modal } from './ui'
 type UnitStatus = 'dirty' | 'clean' | 'stay'
 interface PBag {
   id: string; code: string | null; name: string; qty: number; state: string | null; standard: Record<string, number>
-  cycle: { id: string; state: string | null; unitsOut: number[]; bagsOut: number | null } | null; declaredForThisCleaning: boolean
+  cycle: { id: string; state: string | null; unitsOut: number[]; bagsOut: number | null; finalContent?: { counts?: Record<string, number> } | null } | null; declaredForThisCleaning: boolean
 }
 interface Payload { bags: PBag[]; items: string[] }
 export interface BagsPanelHandle { ensureDeclared: () => Promise<boolean> }
@@ -15,6 +15,9 @@ interface Props { cleaningId: string; propertyId?: string; isInProgress: boolean
 const TAGS = ['Manchas', 'Pelos', 'Olor', 'Húmedo', 'Roto', 'Otro']
 const cacheKey = (pid: string) => `lbags:${pid}`
 const doneKey = (cid: string, bid: string) => `ldecl:${cid}:${bid}`
+const refrKey = (cid: string, bid: string) => `lrefr:${cid}:${bid}`
+// Lo que «dice» la maleta: el contenido final que dejó lavandería; si no hay, el estándar de la casa
+const expectedOf = (b: PBag): Record<string, number> => { const fc = b.cycle?.finalContent?.counts; return fc && Object.keys(fc).length ? fc : b.standard }
 const flag = (k: string) => { try { return localStorage.getItem(k) === '1' } catch { return false } }
 const setFlag = (k: string) => { try { localStorage.setItem(k, '1') } catch { /* sin storage */ } }
 const unitsOf = (b: PBag) => (b.cycle?.unitsOut?.length ? b.cycle.unitsOut : Array.from({ length: Math.max(1, b.qty) }, (_, i) => i + 1))
@@ -26,6 +29,8 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
   const [declare, setDeclare] = useState<PBag[] | null>(null)
   const resolver = useRef<((ok: boolean) => void) | null>(null)
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [refr, setRefr] = useState<PBag | null>(null)
+  const [, tick] = useState(0)
 
   const load = useCallback(async () => {
     if (!LAUNDRY_ENABLED || !propertyId) return
@@ -81,6 +86,9 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
               <button onClick={() => setOpen(o => ({ ...o, [b.id]: !o[b.id] }))} className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: 'white', color: L.teal, border: `1.5px solid ${L.border}` }}>
                 {open[b.id] ? '▾ Ocultar contenido' : '👁 Ver qué trae'}
               </button>
+              {inUse && !declared && (flag(refrKey(cleaningId, b.id))
+                ? <span className="ml-2 text-[11px] font-bold px-3 py-1.5 rounded-xl inline-block" style={{ background: '#DCFCE7', color: '#15803D' }}>✔ Refrendada</span>
+                : <button onClick={() => setRefr(b)} className="ml-2 mt-2 text-[11px] font-bold px-3 py-1.5 rounded-xl" style={{ background: L.teal, color: 'white' }}>✔ Revisar y refrendar</button>)}
               {open[b.id] && (() => {
                 const fin = (b.cycle as any)?.finalContent?.counts as Record<string, number> | undefined
                 const counts = fin && Object.keys(fin).length ? fin : b.standard
@@ -96,8 +104,13 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
             </div>
           )
         })}
-        <p className="text-[10px]" style={{ color: L.muted }}>Al terminar la limpieza te preguntaremos qué dejas sucio.</p>
+        <p className="text-[10px]" style={{ color: L.muted }}>Durante la limpieza revisa la maleta y refréndala. Al terminar te preguntaremos qué regresa sucio y dónde la dejas.</p>
       </div>
+
+      {refr && (
+        <RefrendoSheet bag={refr} cleaningId={cleaningId} onClose={() => setRefr(null)} onToast={onToast}
+          onDone={() => { setFlag(refrKey(cleaningId, refr.id)); setRefr(null); tick(n => n + 1); load() }} />
+      )}
 
       {declare && (
         <DeclareFlow bags={declare} items={data.items} cleaningId={cleaningId}
@@ -110,31 +123,104 @@ const BagsPanel = forwardRef<BagsPanelHandle, Props>(function BagsPanel({ cleani
 })
 export default BagsPanel
 
-interface Detail { units: Record<number, UnitStatus>; short: Record<string, { qty: number; kind: 'left' | 'clean' | 'other' }>; comment: string }
-const KIND_LABEL = { left: 'Quedó limpio en la casa', clean: 'Regresa limpio (no se usó)', other: 'Otro' } as const
+type Place = 'transporte' | 'casa' | 'bodega' | 'lavanderia'
+interface Detail { dirty: Record<string, number>; kind: Record<string, 'left' | 'clean' | 'other'>; place: Record<number, Place>; comment: string }
+const KIND_LABEL = { clean: 'No se usó', left: 'Se quedó en la casa', other: 'Se perdió / otro' } as const
+const PLACES: [Place, string][] = [['transporte', 'Me la llevo'], ['casa', 'Queda en la casa'], ['bodega', 'La dejo en bodega'], ['lavanderia', 'Entregada en lavandería']]
+const listOf = (b: PBag, all: string[]) => { const e = expectedOf(b); const ks = Object.keys(e).filter(k => e[k] > 0); return ks.length ? ks : all }
 
-// ── Una sola pregunta para todas las maletas de la casa ────────────────────────
+// ── Refrendo 1 (durante la limpieza): el cleaner abre la maleta y cuenta contra lo que dice lavandería ──
+function RefrendoSheet({ bag, cleaningId, onClose, onDone, onToast }: { bag: PBag; cleaningId: string; onClose: () => void; onDone: () => void; onToast: Props['onToast'] }) {
+  const exp = expectedOf(bag)
+  const items = listOf(bag, [])
+  const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(items.map(k => [k, exp[k] || 0])))
+  const [dirtyOn, setDirtyOn] = useState(false)
+  const [dirty, setDirty] = useState<Record<string, number>>({})
+  const [note, setNote] = useState('')
+  const [blobs, setBlobs] = useState<Blob[]>([])
+  const [busy, setBusy] = useState(false)
+  const diffs = items.filter(k => (counts[k] ?? 0) !== (exp[k] || 0))
+  const dirtyList = dirtyOn ? items.filter(k => (dirty[k] || 0) > 0) : []
+  const issues = diffs.length + dirtyList.length
+  const go = async () => {
+    setBusy(true)
+    try {
+      const r = await submit<{ incidentsCreated: number }>('refrendo', { cleaningId, bagId: bag.id, counts, dirty: dirtyOn ? dirty : {}, note }, issues ? blobs : [], `refr_${bag.code || bag.id}`)
+      onToast(r.status === 'queued' ? 'Sin señal: el refrendo se enviará solo' : (r.data.incidentsCreated ? `Refrendo enviado · ${r.data.incidentsCreated} incidente(s) registrados` : 'Refrendo ✓ todo coincide'))
+      onDone()
+    } catch (e: any) { onToast(e.message, 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Modal title={`Revisar · ${bag.code || bag.name}`} onClose={onClose}
+      footer={<Big disabled={busy} onClick={go}>{busy ? 'Enviando…' : issues ? `Confirmar refrendo (${issues} diferencia${issues > 1 ? 's' : ''})` : '✔ Confirmar: todo coincide'}</Big>}>
+      <p className="text-[12px]" style={{ color: L.slate }}>Abre la maleta y cuenta. Viene lo que <b>dice lavandería</b>; cambia solo lo que no coincida.</p>
+      <div className="rounded-2xl px-3" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+        {items.map(k => {
+          const diff = (counts[k] ?? 0) - (exp[k] || 0)
+          return (
+            <div key={k} className="flex items-center justify-between py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
+              <div><p className="text-[13px] font-bold" style={{ color: L.ink }}>{k}</p><p className="text-[10px]" style={{ color: diff ? L.red : L.muted }}>Dice lavandería: {exp[k] || 0}{diff < 0 ? ` · falta ${-diff}` : diff > 0 ? ` · sobra ${diff}` : ''}</p></div>
+              <Counter value={counts[k] ?? 0} onChange={n => setCounts(c => ({ ...c, [k]: n }))} />
+            </div>
+          )
+        })}
+      </div>
+      {diffs.length > 0 && <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>⚠ {diffs.length} diferencia(s): se registrarán como incidente («Faltante» o «Sobrante», en propiedad) ligado a esta limpieza y a la maleta.</div>}
+      <div className="rounded-2xl p-3" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+        <p className="text-[13px] font-bold mb-2" style={{ color: L.ink }}>¿Hay algo sucio o manchado?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {([[false, 'No, todo limpio'], [true, 'Sí, marcar piezas']] as const).map(([v, t]) => (
+            <button key={t} onClick={() => setDirtyOn(v)} className="py-2.5 rounded-xl text-[12px] font-bold" style={{ background: dirtyOn === v ? L.teal : 'white', color: dirtyOn === v ? 'white' : L.slate, border: `1.5px solid ${L.border}` }}>{t}</button>
+          ))}
+        </div>
+        {dirtyOn && (
+          <div className="mt-2">
+            <p className="text-[10px] font-bold uppercase mb-1" style={{ color: L.muted }}>Cuántas de cada pieza vinieron sucias</p>
+            {items.map(k => (
+              <div key={k} className="flex items-center justify-between py-1.5" style={{ borderTop: '1px solid #F1F5F9' }}>
+                <span className="text-[12px]" style={{ color: L.ink }}>{k}</span>
+                <Counter value={dirty[k] || 0} max={counts[k] ?? 99} onChange={n => setDirty(d => ({ ...d, [k]: n }))} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {issues > 0 && (
+        <>
+          <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Comentario (opcional)" className="w-full text-[13px] p-3 rounded-2xl" style={{ border: `1.5px solid ${L.border}` }} />
+          <p className="text-[11px] font-bold uppercase" style={{ color: L.muted }}>Foto (recomendada)</p>
+          <BlobPhotos blobs={blobs} onChange={setBlobs} />
+        </>
+      )}
+    </Modal>
+  )
+}
+
+// ── Refrendo 2 (al terminar): qué regresa sucio y dónde la deja ─────────────────
 function DeclareFlow({ bags, items, cleaningId, onCancel, onDone, onToast }: { bags: PBag[]; items: string[]; cleaningId: string; onCancel: () => void; onDone: () => void; onToast: Props['onToast'] }) {
-  const [step, setStep] = useState<'ask' | number>('ask') // 'ask' o índice de la maleta en el detalle
+  const [step, setStep] = useState(0)
   const [details, setDetails] = useState<Record<string, Detail>>({})
   const [bad, setBad] = useState(false)
-    const [tags, setTags] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [blobs, setBlobs] = useState<Blob[]>([])
   const [noPhoto, setNoPhoto] = useState(false)
   const [busy, setBusy] = useState(false)
   const needPhoto = bad && blobs.length === 0 && !noPhoto
 
-  const detailOf = (b: PBag): Detail => details[b.id] || { units: Object.fromEntries(unitsOf(b).map(u => [u, 'dirty' as UnitStatus])), short: {}, comment: '' }
+  const detailOf = (b: PBag): Detail => details[b.id] || {
+    dirty: Object.fromEntries(listOf(b, items).map(k => [k, expectedOf(b)[k] ?? b.standard[k] ?? 0])),
+    kind: {}, place: Object.fromEntries(unitsOf(b).map(u => [u, 'transporte' as Place])), comment: '',
+  }
 
-  const sendAll = async (list: PBag[]) => {
+  const sendAll = async () => {
     setBusy(true)
     try {
       let queued = false
-      for (const b of list) {
-        const d = detailOf(b)
-        const short = Object.entries(d.short).filter(([, v]) => v.qty > 0).map(([item, v]) => ({ item, qty: v.qty, kind: v.kind, reason: d.comment }))
-        const units = unitsOf(b).map(u => ({ unit: u, status: d.units[u] || 'dirty' }))
+      for (const b of bags) {
+        const d = detailOf(b), exp = expectedOf(b)
+        const short = listOf(b, items).filter(k => (d.dirty[k] ?? 0) < (exp[k] ?? 0)).map(k => ({ item: k, qty: (exp[k] ?? 0) - (d.dirty[k] ?? 0), kind: d.kind[k] || 'clean', reason: d.comment }))
+        const units = unitsOf(b).map(u => { const pl = d.place[u] || 'transporte'; return { unit: u, status: pl === 'casa' ? 'stay' : 'dirty', ...(pl === 'bodega' || pl === 'lavanderia' ? { place: pl } : {}) } })
         const r = await submit('declareReturn', {
           cleaningId, bagId: b.id, short, units,
           condition: bad ? 'Malo' : 'Normal', tags: bad ? tags : [], note: [bad ? note : '', d.comment].filter(Boolean).join(' | '),
@@ -146,64 +232,33 @@ function DeclareFlow({ bags, items, cleaningId, onCancel, onDone, onToast }: { b
     } catch (e: any) { onToast(e.message, 'err') } finally { setBusy(false) }
   }
 
-  if (step === 'ask') {
-    return (
-      <Modal title="Maletas de esta casa" onClose={onCancel}>
-        <p className="text-[14px] font-semibold" style={{ color: L.ink }}>
-          ¿Dejas <b>todo</b> sucio en {bags.length > 1 ? 'las maletas' : `la maleta ${bags[0].code || ''}`}?
-        </p>
-        <div className="space-y-2">
-          <Big color={L.green} disabled={busy || needPhoto} onClick={() => sendAll(bags)}>✅ Sí, todo — terminar</Big>
-          <Big ghost color={L.amber} disabled={busy} onClick={() => setStep(0)}>Falta algo / no regresa todo</Big>
-        </div>
-        <button onClick={() => setBad(b => !b)} className="text-[12px] font-bold" style={{ color: bad ? L.red : L.slate }}>
-          {bad ? '▾' : '▸'} Viene en mal estado (manchas, pelos, olor…)
-        </button>
-        {bad && <BadCondition tags={tags} setTags={setTags} note={note} setNote={setNote} blobs={blobs} setBlobs={setBlobs} noPhoto={noPhoto} setNoPhoto={setNoPhoto} />}
-      </Modal>
-    )
-  }
-
   const bag = bags[step]
   const d = detailOf(bag)
+  const exp = expectedOf(bag)
   const units = unitsOf(bag)
-  const itemList = Object.keys(bag.standard).length ? Object.keys(bag.standard) : items
+  const itemList = listOf(bag, items)
   const setD = (patch: Partial<Detail>) => setDetails(s => ({ ...s, [bag.id]: { ...d, ...patch } }))
   const last = step === bags.length - 1
-  const next = () => (last ? sendAll(bags) : setStep(step + 1))
+  const allDefault = itemList.every(k => (d.dirty[k] ?? 0) === (exp[k] ?? 0)) && units.every(u => (d.place[u] || 'transporte') === 'transporte')
+  const next = () => (last ? sendAll() : setStep(step + 1))
 
   return (
-    <Modal title={`${bag.code || bag.name} (${step + 1}/${bags.length})`} onClose={() => setStep('ask')}
-      footer={<Big disabled={busy || (last && needPhoto)} onClick={next}>{last ? 'Confirmar y terminar' : 'Siguiente'}</Big>}>
-      {units.length > 1 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-bold uppercase" style={{ color: L.muted }}>¿Qué pasa con cada maleta?</p>
-          {units.map(u => (
-            <div key={u} className="rounded-2xl p-2.5" style={{ background: 'white', border: `1px solid ${L.border}` }}>
-              <p className="text-[12px] font-bold mb-1.5" style={{ color: L.ink }}>Maleta {u}</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {([['dirty', 'Regresa sucia', L.green], ['clean', 'Regresa limpia', L.teal], ['stay', 'Se queda en la casa', L.amber]] as const).map(([k, label, color]) => (
-                  <button key={k} onClick={() => setD({ units: { ...d.units, [u]: k } })} className="py-2 rounded-xl text-[11px] font-bold leading-tight" style={{ background: (d.units[u] || 'dirty') === k ? color : 'white', color: (d.units[u] || 'dirty') === k ? 'white' : L.slate, border: `1.5px solid ${L.border}` }}>{label}</button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="space-y-2">
-        <p className="text-[11px] font-bold uppercase" style={{ color: L.muted }}>Piezas que NO regresan sucias (si sabes cuáles)</p>
-        {itemList.map(it => {
-          const cur = d.short[it]
+    <Modal title={`${bag.code || bag.name}${bags.length > 1 ? ` (${step + 1}/${bags.length})` : ''}`} onClose={step > 0 ? () => setStep(step - 1) : onCancel}
+      footer={<Big color={allDefault ? L.green : L.teal} disabled={busy || (last && needPhoto)} onClick={next}>{busy ? 'Enviando…' : last ? (allDefault ? '✅ Todo sucio — enviar a lavandería' : 'Confirmar y terminar') : 'Siguiente'}</Big>}>
+      <p className="text-[12px] font-semibold" style={{ color: L.slate }}>Esto es lo que <b>mandas a lavandería</b>. Viene todo sucio por defecto; cambia solo lo que no.</p>
+      <div className="rounded-2xl px-3" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+        {itemList.map(k => {
+          const cur = d.dirty[k] ?? 0, e = exp[k] ?? 0, short = cur < e
           return (
-            <div key={it} className="rounded-2xl p-3" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+            <div key={k} className="py-2" style={{ borderTop: '1px solid #F1F5F9' }}>
               <div className="flex items-center justify-between">
-                <p className="text-[13px] font-bold" style={{ color: L.ink }}>{it}{bag.standard[it] != null ? ` (std ${bag.standard[it]})` : ''}</p>
-                <Counter value={cur?.qty || 0} max={bag.standard[it] ?? 99} onChange={n => setD({ short: { ...d.short, [it]: { qty: n, kind: cur?.kind || 'left' } } })} />
+                <div><p className="text-[13px] font-bold" style={{ color: L.ink }}>{k}</p><p className="text-[10px]" style={{ color: short ? L.amber : L.muted }}>Trae {e}{short ? ` · ${e - cur} no regresa sucia` : ' · todas regresan sucias'}</p></div>
+                <Counter value={cur} max={e} onChange={n => setD({ dirty: { ...d.dirty, [k]: n } })} />
               </div>
-              {(cur?.qty || 0) > 0 && (
+              {short && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map(k => (
-                    <button key={k} onClick={() => setD({ short: { ...d.short, [it]: { qty: cur!.qty, kind: k } } })} className="px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: cur!.kind === k ? L.ink : 'white', color: cur!.kind === k ? 'white' : L.slate, border: `1px solid ${L.border}` }}>{KIND_LABEL[k]}</button>
+                  {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map(kd => (
+                    <button key={kd} onClick={() => setD({ kind: { ...d.kind, [k]: kd } })} className="px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: (d.kind[k] || 'clean') === kd ? L.ink : 'white', color: (d.kind[k] || 'clean') === kd ? 'white' : L.slate, border: `1px solid ${L.border}` }}>{KIND_LABEL[kd]}</button>
                   ))}
                 </div>
               )}
@@ -211,6 +266,17 @@ function DeclareFlow({ bags, items, cleaningId, onCancel, onDone, onToast }: { b
           )
         })}
       </div>
+      <p className="text-[11px] font-bold uppercase" style={{ color: L.muted }}>¿Dónde {units.length > 1 ? 'deja cada maleta' : 'la dejas'}?</p>
+      {units.map(u => (
+        <div key={u} className="rounded-2xl p-2.5" style={{ background: 'white', border: `1px solid ${L.border}` }}>
+          {units.length > 1 && <p className="text-[12px] font-bold mb-1.5" style={{ color: L.ink }}>Maleta {u}</p>}
+          <div className="grid grid-cols-2 gap-1.5">
+            {PLACES.map(([k, label]) => (
+              <button key={k} onClick={() => setD({ place: { ...d.place, [u]: k } })} className="py-2 rounded-xl text-[11px] font-bold leading-tight" style={{ background: (d.place[u] || 'transporte') === k ? L.teal : 'white', color: (d.place[u] || 'transporte') === k ? 'white' : L.slate, border: `1.5px solid ${L.border}` }}>{label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
       <textarea value={d.comment} onChange={e => setD({ comment: e.target.value })} rows={2} placeholder="Comentario para lavandería (opcional)" className="w-full text-[13px] p-3 rounded-2xl" style={{ border: `1.5px solid ${L.border}` }} />
       {last && (
         <>
