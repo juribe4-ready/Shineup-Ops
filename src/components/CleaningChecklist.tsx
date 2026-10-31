@@ -792,6 +792,9 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
         <div ref={reporteRef}>
           <SectionLabel>Reporte</SectionLabel>
 
+          {/* Maletas de la casa (detalle) — antes de la foto del almacén */}
+          <div className="mb-4"><BagsPanel ref={bagsRef} cleaningId={cleaning.id} propertyId={details?.propertyId} isInProgress={editable} onToast={showToast} /></div>
+
           {/* Foto del Almacén */}
           <div className="rounded-2xl overflow-hidden mb-4 p-5" style={{ background: C.white, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between mb-3">
@@ -924,9 +927,6 @@ export default function CleaningChecklist({ cleaning, onBack, staffId = 'rec6CVs
             {!editable && <p className="text-[10px] font-medium text-center pb-3" style={{ color: C.muted }}>Inicia la limpieza para interactuar</p>}
           </div>
         </div>
-
-        {/* ── LAUNDRY: maletas de la propiedad ────────── */}
-        <BagsPanel ref={bagsRef} cleaningId={cleaning.id} propertyId={details?.propertyId} isInProgress={editable} onToast={showToast} />
 
         {/* ── CIERRE ──────────────────────────────────── */}
         <div ref={cierreRef} style={{ opacity: locked ? 0.5 : 1, pointerEvents: locked ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
