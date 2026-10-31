@@ -64,8 +64,8 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left flex gap-3 items-center rounded-2xl bg-white p-3 active:scale-[0.99] transition-all"
-      style={{ border: '1px solid #E2E8F0', borderLeft: `4px solid ${bar}`, opacity: done ? 0.6 : 1 }}
+      className={`w-full text-left flex gap-3 items-center rounded-2xl p-3 active:scale-[0.99] transition-all ${done ? '' : 'bg-white'}`}
+      style={{ border: '1px solid #E2E8F0', borderLeft: `4px solid ${done ? '#CBD5E1' : bar}`, opacity: done ? 0.42 : 1, filter: done ? 'grayscale(1)' : undefined, background: done ? '#F1F5F9' : undefined }}
     >
       <div className="shrink-0 rounded-xl overflow-hidden flex items-center justify-center" style={{ width: 56, height: 56, background: '#F1F5F9' }}>
         {img
@@ -93,7 +93,7 @@ const CleaningRow = memo<Props>(({ cleaning, onClick }) => {
               : <span className="text-[10px]" style={{ color: '#CBD5E1' }}>Sin staff</span>}
           </div>
           {ld.bags > 0 && (
-            <Chip ok={ld.bagsLoaded === ld.bags} title="Maletas cargadas"><Luggage className="w-3 h-3" />{ld.bagsLoaded}/{ld.bags}</Chip>
+            <Chip ok={ld.bagsLoaded === ld.bags} title="Maletas cargadas"><Luggage className="w-3 h-3" />{ld.bagsLoaded} de {ld.bags} cargadas</Chip>
           )}
           {eq > 0 && (
             <Chip ok={ld.kits > 0 && ld.kitsLoaded === ld.kits} title="Kits y herramientas"><Hammer className="w-3 h-3" />{ld.kits > 0 ? `${ld.kitsLoaded}/${ld.kits}` : eq}</Chip>
