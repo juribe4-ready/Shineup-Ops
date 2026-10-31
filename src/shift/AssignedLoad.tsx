@@ -58,7 +58,7 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
         if (us.some(u => u.bagId === b.id)) continue
         const house = (b.properties || []).filter((p: any) => props.includes(p.id)).map((p: any) => p.name).join(' · ') || b.name
         const opened = cleanings.some(c => c.propertyId && (b.properties || []).some((p: any) => p.id === c.propertyId) && (c.status === 'In Progress' || c.status === 'Done'))
-        unitCodesOf(b).forEach((code, i) => us.push({ code, bagId: b.id, propertyId: r.item, house, n: i + 1, of: Math.max(1, b.qty || 1), loaded: unitIsLoaded(b.cycle, i + 1), state: b.cycle?.state || b.state || null, opened }))
+        unitCodesOf(b).forEach((code, i) => us.push({ code, bagId: b.id, propertyId: r.item, house, n: i + 1, of: Math.max(1, b.qty || 1), loaded: unitIsLoaded(b.cycle, i + 1), state: b.cycle?.state || b.state || null, opened, dirtyAt: b.cycle?.dirtyAt || null, stay: !!(b.cycle?.unitsBack || []).find((x: any) => x.unit === i + 1 && x.status === 'stay') }))
       }
       const failed = res.filter(r => !r.ok).length
       if (!alive) return
@@ -109,7 +109,13 @@ export default function AssignedLoad({ cleanings, refreshKey, onScan }: { cleani
   const chip = (u: BagUnit) => {
     if (u.loaded) return { t: 'Cargada ✓', bg: '#E8F8EF', fg: '#15803D' }
     if (u.state === 'Clean' || u.state === 'In Use') return u.opened ? { t: 'Casa abierta · sin escanear', bg: '#FEE2E2', fg: '#B91C1C' } : { t: 'Lista · falta cargar', bg: '#FEF3C7', fg: '#92400E' }
-    return { t: u.state === 'Dirty' ? 'Sucia' : (u.state || 'sin estado'), bg: '#F1F5F9', fg: '#475569' }
+    if (u.state === 'Dirty' && u.stay) return { t: 'Se quedó en la casa', bg: '#F1F5F9', fg: '#475569' }
+    if (u.state === 'Dirty' && u.dirtyAt) {
+      const et = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const days = Math.round((Date.parse(et(new Date())) - Date.parse(et(new Date(u.dirtyAt)))) / 86400000)
+      return { t: `Sucia · usada ${days <= 0 ? 'hoy' : days === 1 ? 'ayer' : `hace ${days} días`}, sin lavar`, bg: '#F1F5F9', fg: '#475569' }
+    }
+    return { t: u.state === 'Dirty' ? 'Sucia · aún no lista' : (u.state || 'sin estado'), bg: '#F1F5F9', fg: '#475569' }
   }
 
   return (

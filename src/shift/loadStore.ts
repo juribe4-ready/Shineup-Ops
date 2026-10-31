@@ -24,7 +24,7 @@ export function setChecked(code: string, on: boolean) {
 }
 
 // ── Maletas físicas asignadas hoy (una por unidad: una casa puede tener 2) ──
-export interface BagUnit { code: string; bagId: string; propertyId: string; house: string; n: number; of: number; loaded: boolean; state: string | null; opened: boolean }
+export interface BagUnit { code: string; bagId: string; propertyId: string; house: string; n: number; of: number; loaded: boolean; state: string | null; opened: boolean; dirtyAt?: string | null; stay?: boolean }
 let units: BagUnit[] = []
 export const setUnits = (u: BagUnit[]) => { units = u; notify() }
 export const getUnits = () => units
