@@ -22,7 +22,7 @@ export default function Scanner({ onCode, paused = false }: { onCode: (code: str
 
     const emit = (code: string) => {
       const now = Date.now()
-      if (code === last.code && now - last.at < 2500) return
+      if (code === last.code && now - last.at < 1500) return
       last = { code, at: now }
       if (navigator.vibrate) navigator.vibrate(60)
       onCodeRef.current(code.trim())
@@ -38,22 +38,24 @@ export default function Scanner({ onCode, paused = false }: { onCode: (code: str
             if (found[0]?.rawValue) emit(found[0].rawValue)
           } else if (canvasRef.current) {
             const c = canvasRef.current
-            const w = 480, h = Math.round((v.videoHeight / v.videoWidth) * w) || 360
+            // recorte central (donde está el recuadro) a resolución casi nativa: más rápido y lee de más lejos
+            const vw = v.videoWidth, vh = v.videoHeight, side = Math.min(vw, vh) * 0.8
+            const sx = (vw - side) / 2, sy = (vh - side) / 2, w = 420, h = 420
             c.width = w; c.height = h
             const ctx = c.getContext('2d', { willReadFrequently: true })!
-            ctx.drawImage(v, 0, 0, w, h)
+            ctx.drawImage(v, sx, sy, side, side, 0, 0, w, h)
             const img = ctx.getImageData(0, 0, w, h)
             const res = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' })
             if (res?.data) emit(res.data)
           }
         } catch { /* frame ilegible */ }
       }
-      timer = window.setTimeout(tick, 220)
+      timer = window.setTimeout(tick, 90)
     }
 
     ;(async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' } as any] }, audio: false })
         if (stopped) { stream.getTracks().forEach(t => t.stop()); return }
         const v = videoRef.current!
         v.srcObject = stream

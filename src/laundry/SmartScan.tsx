@@ -3,7 +3,7 @@ import { lGet } from './api'
 import { submit } from './outbox'
 import Scanner from './Scanner'
 import { Big, L, Modal } from './ui'
-import { findEquipment, setChecked, getChecked, getEquipment, getUnits, markUnitLoaded, subscribeLoad, unitIsLoaded } from '../shift/loadStore'
+import { findEquipment, setChecked, getChecked, getEquipment, getUnits, markUnitLoaded, subscribeLoad, unitIsLoaded, unitCodesOf } from '../shift/loadStore'
 
 interface Cl { id: string; propertyId?: string | null; propertyText?: string; status?: string }
 type Card = { kind: 'bag'; code: string; info: any } | { kind: 'equip'; text: string; code: string }
@@ -94,6 +94,13 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
 
   const bagCard = (c: Extract<Card, { kind: 'bag' }>) => {
     const info = c.info; const st = unitStateOf(info)
+    // Resto de maletas de la casa aún sin cargar: por defecto se cargan TODAS juntas (antes el botón principal cargaba solo la escaneada)
+    // Las demás maletas de la casa se calculan con los datos del SERVIDOR (cantidad + ciclo), no con la lista local,
+    // que puede estar vacía si no se abrió «Cargar transporte». Así el botón principal siempre carga TODAS las pendientes.
+    const rest = (mode === 'load' || st === 'Clean')
+      ? unitCodesOf(info.bag).map((cd, i) => ({ cd, n: i + 1 })).filter(x => x.cd.toUpperCase() !== c.code && !unitIsLoaded(info.cycle, x.n) && !getUnits().some(u => u.code.toUpperCase() === x.cd.toUpperCase() && u.loaded)).map(x => ({ code: x.cd }))
+      : []
+    const allCodes = [c.code, ...rest.map(u => u.code)]
     const useFinal = st === 'Clean' && info.cycle?.finalContent?.counts
     const counts: Record<string, number> = useFinal ? info.cycle.finalContent.counts : (info.bag.standard || {})
     const houses = (info.bag.properties || []).map((p: any) => p.name).join(' · ')
@@ -120,22 +127,17 @@ export default function SmartScan({ mode, cleanings, onClose, onToast, onChanged
             {pick.map(p => <button key={p.id} disabled={busy} onClick={() => markDirty(info, p)} className="w-full text-left py-2.5 px-3 mb-1.5 rounded-xl font-bold text-[13px]" style={{ border: `1.5px solid ${L.border}`, color: L.ink }}>{p.propertyText}</button>)}
           </div>
         )}
-        {(mode === 'load' || st === 'Clean') && (() => {
-          const rest = getUnits().filter(u => u.bagId === info.bag.id && !u.loaded && u.code.toUpperCase() !== c.code)
-          return rest.length > 0 ? (
-            <div className="mt-3"><Big ghost color={TEAL} disabled={busy} onClick={() => loadBag([c.code, ...rest.map(u => u.code)])}>Cargar las {rest.length + 1} maletas de la casa</Big></div>
-          ) : null
-        })()}
         <div className="flex gap-2 mt-3">
           <div className="flex-1"><Big ghost color={L.slate} onClick={() => { setCard(null); setPick(null) }}>Cancelar</Big></div>
           {mode === 'load'
-            ? <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Confirmar y cargar esta</Big></div>
+            ? <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(rest.length ? allCodes : c.code)}>{rest.length ? `Cargar las ${allCodes.length} maletas de la casa` : 'Confirmar y cargar esta'}</Big></div>
             : <>
-              {(st === 'Clean' || !st) && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(c.code)}>Cargar al transporte</Big></div>}
+              {(st === 'Clean' || !st) && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => loadBag(rest.length ? allCodes : c.code)}>{rest.length ? `Cargar las ${allCodes.length} maletas de la casa` : 'Cargar al transporte'}</Big></div>}
               {st === 'In Use' && (info.bag.qty || 1) <= 1 && <div className="flex-[2]"><Big color={TEAL} disabled={busy} onClick={() => startMarkDirty(info)}>Marcar sucia</Big></div>}
               {st === 'In Use' && (info.bag.qty || 1) > 1 && <div className="flex-[2] text-[12px] font-semibold text-center py-3" style={{ color: L.slate }}>Ya está cargada. Se marca sucia al cerrar la casa.</div>}
             </>}
         </div>
+        {rest.length > 0 && <button disabled={busy} onClick={() => loadBag(c.code)} className="w-full mt-2 text-[12px] font-semibold underline" style={{ color: L.slate }}>Cargar solo esta ({c.code})</button>}
       </div>
     )
   }
