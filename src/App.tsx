@@ -114,6 +114,17 @@ export default function App() {
   }
   useEffect(() => { if (profile?.staff_airtable_id) loadShifts() }, [profile])
 
+  // Equipo completo del día (todos los cleaners con limpieza hoy, no solo los de mis casas). Si falla, queda como antes.
+  const [dayTeam, setDayTeam] = useState<Person[]>([])
+  const loadDayTeam = async () => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    try {
+      const r = await fetch(`/api/dayTeam?date=${today}`)
+      if (r.ok) { const j = await r.json(); setDayTeam(Array.isArray(j.team) ? j.team : []) }
+    } catch { /* sin red: se usa el equipo de mis casas */ }
+  }
+  useEffect(() => { if (profile?.staff_airtable_id) loadDayTeam() }, [profile])
+
   const filteredCleanings = useMemo(() => {
     const q = searchQuery.toLowerCase()
     return cleanings.filter(c =>
@@ -142,10 +153,11 @@ export default function App() {
     for (const c of todayCleanings) (c.staffIds || []).forEach((id, i) => {
       if (!m.has(id)) m.set(id, { staffId: id, name: c.staffNames?.[i] || c.staffList?.[i] || 'Persona', initials: c.staffList?.[i] || '??' })
     })
+    for (const p of dayTeam) if (!m.has(p.staffId)) m.set(p.staffId, p)
     const me = profile?.staff_airtable_id
     if (me) m.set(me, { staffId: me, name: profile?.full_name || m.get(me)?.name || 'Yo', initials: profile?.initials || m.get(me)?.initials || '??' })
     return [...m.values()]
-  }, [todayCleanings, profile])
+  }, [todayCleanings, profile, dayTeam])
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
